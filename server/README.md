@@ -8,7 +8,7 @@ server/
 ├── common.py            # 统一 Schema(Listing)、数值解析、配置加载
 ├── run_daily.py         # 每日主流程：采集→评分→入库→优选→推送
 ├── scheduler.py         # APScheduler 定时（每日 07:30）
-├── collectors/          # 采集器：land_market / mining / ejy
+├── collectors/          # 采集器：land_market / mining / ejy + filter(已成交过滤)
 ├── pipeline/            # classifier / scorer(旧) / value_scorer(v2) / selector / notifier
 ├── db/store.py          # SQLite 存储 + 变更检测 + 旧库迁移
 ├── rescore.py           # 用当前算法重算全库分数并回写（不重新采集）
@@ -114,6 +114,16 @@ python rescore.py             # 全量重算 + 回写 + 重排当日推荐
 ```
 
 > 当前库 1563 条已全部重算为 v2，均分 61.2。因为多数标的缺价格/评估价，性价比只能给中性分——这是数据现实，接入更多带评估价的源后会改善。旧的 B/C 评分仍在 `pipeline/scorer.py`，把 `value_scoring.enabled` 设为 false 即可回退。
+
+## 已成交标的不入库
+
+出让结果公示、成交公示、中标结果等**已成交**信息对"发现机会"无价值，系统在三层过滤：
+
+1. **采集源头**：mining 只采 `kyqcrgg/`（出让公告）和 `zrgs/`（转让公示），不采 `jggs/`（出让结果）；land_market 不采"交易结果公示"端点。
+2. **采集器出口**：各采集器返回前统一过 `collectors/filter.py`，按标题关键词剔除结果类。
+3. **存储兜底**：`Store.upsert_listing()` 对已成交标的直接拒写，防止其他来源/旧数据混入。
+
+判定规则集中在 `collectors/filter.py` 的 `RESULT_PATTERNS` / `RESULT_URL_PATTERNS`，发现新的结果公示话术往里加即可。存量数据在切换时已清理（删除 109 条已成交及其变更记录）。
 
 ## 推送配置（可选）
 M1 默认 `push.enabled: false`。要启用，二选一：

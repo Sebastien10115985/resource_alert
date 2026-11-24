@@ -7,6 +7,7 @@ import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common import Listing, now_iso, ROOT
+from collectors.filter import is_concluded
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS listings (
@@ -83,6 +84,9 @@ class Store:
 
     def upsert_listing(self, listing: Listing) -> bool:
         """写入或更新标的。返回 True 表示有新变更（新增或 WATCH_FIELDS 变化）。"""
+        # 兜底：已成交/结果公示类不入库（采集器侧已过滤，这里防其他来源/旧数据混入）
+        if is_concluded(listing):
+            return False
         d = listing.to_dict()
         lid = d["id"]
         old = self.conn.execute("SELECT * FROM listings WHERE id=?", (lid,)).fetchone()

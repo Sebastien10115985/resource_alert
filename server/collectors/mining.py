@@ -4,14 +4,15 @@ import re
 import urllib.parse
 from common import Listing, clean_text
 from .base import BaseCollector
+from .filter import filter_concluded
 
+# 只保留"机会"栏目：出让公告 + 转让公示。
+# jggs/jjgs、jggs/ckjjgs 是"出让结果公示"（已成交），对发现机会无价值，不采集。
 COLS = {
     "kyqcrgg/tkq/": ("探矿权", "出让公告"),
     "kyqcrgg/ckq/": ("采矿权", "出让公告"),
     "zrgs/tkzrgs/": ("探矿权", "转让公示"),
     "zrgs/ckzrgs/": ("采矿权", "转让公示"),
-    "jggs/jjgs/": ("探矿权", "出让结果"),
-    "jggs/ckjjgs/": ("采矿权", "出让结果"),
 }
 LINK_RE = re.compile(r'href=["\']([^"\']*t20\d{6}_\d+\.htm)["\'][^>]*>([^<]{6,150})')
 
@@ -66,4 +67,7 @@ class MiningCollector(BaseCollector):
                         raw=kind,
                     ))
                 self.polite_sleep()
-        return out
+        kept, removed = filter_concluded(out)
+        if removed:
+            print(f"  [mining] 过滤已成交/结果公示 {removed} 条")
+        return kept

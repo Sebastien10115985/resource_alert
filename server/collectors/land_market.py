@@ -4,11 +4,12 @@ import json
 import urllib.parse
 from common import Listing, to_yuan, clean_text
 from .base import BaseCollector
+from .filter import filter_concluded
 
 ENDPOINTS = [
     ("转让信息", "/epf-landweb/tsell/getTransfer"),
     ("求购需求", "/epf-landweb/tpurchase/getIndexTPurchaseList"),
-    ("交易结果公示", "/epf-landweb/landweb/transtarget/transNoticeOrResultList"),
+    # 交易结果公示（transNoticeOrResultList）是已成交数据，对发现机会无价值，不采集
     # 热门供需 pageSize 被锁 2 且翻页重复，M1 暂不采
 ]
 
@@ -80,4 +81,7 @@ class LandMarketCollector(BaseCollector):
             if it.key in seen:
                 continue
             seen.add(it.key); uniq.append(it)
-        return uniq
+        kept, removed = filter_concluded(uniq)
+        if removed:
+            print(f"  [land_market] 过滤已成交/结果公示 {removed} 条")
+        return kept

@@ -5,6 +5,7 @@ import html as htmlmod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from common import Listing, to_yuan, clean_text
 from .base import BaseCollector
+from .filter import filter_concluded
 
 CATEGORY_MAP = {
     "FC": "房产", "CL": "二手车", "ESSB": "二手设备", "WZ": "闲置资产",
@@ -120,4 +121,7 @@ class EJyCollector(BaseCollector):
                 url=f"{self.base}/info/{code}",
                 raw="",
             ))
-        return out
+        kept, removed = filter_concluded(out)
+        if removed:
+            print(f"  [ejy] 过滤已成交/结果公示 {removed} 条")
+        return kept
