@@ -48,7 +48,7 @@ class Listing:
     source: str
     external_id: str
     title: str
-    category: str = "C"                 # B=企业, C=个人
+    category: str = "C"                 # B=企业, C=个人, BC=企业+个人双推
     asset_type: str = ""
     province: str = ""
     city: str = ""

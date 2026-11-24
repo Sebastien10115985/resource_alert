@@ -107,7 +107,7 @@ def score_listing(l: Listing, cfg: dict) -> int:
     """按品类选权重打分，并写回 l.score / l.score_reasons。"""
     reasons = []
     before = l.score
-    if l.category == "B":
+    if l.category in ("B", "BC"):
         l.score = score_business(l, cfg)
         if l.discount_rate and l.discount_rate < 1:
             reasons.append(f"低于评估价{int((1-l.discount_rate)*100)}%")

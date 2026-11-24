@@ -74,12 +74,12 @@ def main():
 
     # 回写全库
     conn.executemany(
-        """UPDATE listings SET score=?, score_reasons=?, value_score=?, title_score=?,
+        """UPDATE listings SET score=?, score_reasons=?, category=?, value_score=?, title_score=?,
            risk_score=?, seller_score=?, time_score=?, score_detail=?,
            market_basis=?, scoring_version=? WHERE id=?""",
         [
             (
-                l.score, json.dumps(l.score_reasons, ensure_ascii=False),
+                l.score, json.dumps(l.score_reasons, ensure_ascii=False), l.category,
                 l.value_score, l.title_score, l.risk_score, l.seller_score, l.time_score,
                 json.dumps(l.score_detail, ensure_ascii=False), l.market_basis, "v2",
                 f"{l.source}:{l.external_id}",

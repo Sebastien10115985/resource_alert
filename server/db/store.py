@@ -140,20 +140,27 @@ class Store:
 
     def save_recommendations(self, date: str, items_by_cat: dict):
         self.conn.execute("DELETE FROM recommendations WHERE date=?", (date,))
+        written_scores = set()  # BC 标的会进 B/C 两组，评分明细只回写一次即可
         for cat, items in items_by_cat.items():
             for rank, it in enumerate(items, 1):
                 lid = it.to_dict()["id"]
+                # recommendations.category 用当前分组 cat：BC 标的在 B、C 各留一条，
+                # 这样 App 按 category=B 或 C 查询时都能拉到它
                 self.conn.execute(
                     "INSERT INTO recommendations (date,category,listing_id,rank,score) VALUES (?,?,?,?,?)",
                     (date, cat, lid, rank, it.score),
                 )
-                # 回写评分与理由到 listings，供 API/App 展示
+                if lid in written_scores:
+                    continue
+                written_scores.add(lid)
+                # 回写评分与理由到 listings，供 API/App 展示。
+                # category 用标的自身的归属（可能是 BC），不能用分组 cat 覆盖。
                 self.conn.execute(
                     """UPDATE listings SET score=?, score_reasons=?, category=?,
                        value_score=?, title_score=?, risk_score=?, seller_score=?, time_score=?,
                        score_detail=?, market_basis=?, scoring_version=? WHERE id=?""",
                     (
-                        it.score, json.dumps(it.score_reasons, ensure_ascii=False), cat,
+                        it.score, json.dumps(it.score_reasons, ensure_ascii=False), it.category,
                         getattr(it, "value_score", 0), getattr(it, "title_score", 0),
                         getattr(it, "risk_score", 0), getattr(it, "seller_score", 0),
                         getattr(it, "time_score", 0),

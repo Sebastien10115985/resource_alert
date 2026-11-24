@@ -200,6 +200,7 @@ tr:hover td{background:#f7f9ff}
 .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;white-space:nowrap}
 .tag-b{background:#fff3e8;color:#d46b08}
 .tag-c{background:#e6f4ff;color:#0958d9}
+.tag-bc{background:#f6ffed;color:#389e0d}
 .score{font-weight:600}
 .score.high{color:var(--ok)}
 .score.mid{color:var(--warn)}
@@ -259,7 +260,7 @@ a:hover{text-decoration:underline}
     <div class="filters">
       <input id="f-search" placeholder="搜索标题 / 卖方 / ID" onkeydown="if(event.key==='Enter')loadListings(1)">
       <select id="f-source" onchange="loadListings(1)"><option value="">全部来源</option></select>
-      <select id="f-category" onchange="loadListings(1)"><option value="">全部分类</option><option value="B">企业类 B</option><option value="C">个人类 C</option></select>
+      <select id="f-category" onchange="loadListings(1)"><option value="">全部分类</option><option value="B">企业类 B</option><option value="C">个人类 C</option><option value="BC">双推 BC</option></select>
       <select id="f-score" onchange="loadListings(1)"><option value="0">全部评分</option><option value="60">≥60</option><option value="70">≥70</option><option value="80">≥80</option></select>
       <select id="f-sort" onchange="loadListings(1)"><option value="score">按综合分</option><option value="value">按性价比分</option><option value="risk">按安全分</option><option value="title">按权属分</option><option value="newest">按采集时间</option><option value="price_asc">价格从低到高</option><option value="price_desc">价格从高到低</option></select>
       <button class="primary" onclick="loadListings(1)">查询</button>
@@ -273,7 +274,7 @@ a:hover{text-decoration:underline}
   <div class="card">
     <div class="filters">
       <select id="r-date" onchange="loadRecommend()"></select>
-      <select id="r-category" onchange="loadRecommend()"><option value="">B + C 全部</option><option value="B">企业类 B</option><option value="C">个人类 C</option></select>
+      <select id="r-category" onchange="loadRecommend()"><option value="">B + C 全部</option><option value="B">企业类 B（含双推）</option><option value="C">个人类 C（含双推）</option></select>
     </div>
     <table><thead><tr><th>#</th><th>分类</th><th>评分</th><th>标题</th><th>价格</th><th>理由</th><th>操作</th></tr></thead><tbody id="tb-recommend"></tbody></table>
   </div>
@@ -304,7 +305,7 @@ function esc(s){ return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 function money(n){ if(n==null||n==='') return '<span class="muted">—</span>'; const v=Number(n); if(!isFinite(v))return esc(n); return '¥'+v.toLocaleString('zh-CN',{maximumFractionDigits:0}); }
 function date(s){ return s ? String(s).slice(0,16).replace('T',' ') : '<span class="muted">—</span>'; }
 function cut(s,n=46){ s=String(s??''); return s.length>n ? '<span title="'+esc(s)+'">'+esc(s.slice(0,n))+'…</span>' : esc(s); }
-function catTag(c){ return c==='B' ? '<span class="tag tag-b">企业 B</span>' : (c==='C' ? '<span class="tag tag-c">个人 C</span>' : '<span class="muted">—</span>'); }
+function catTag(c){ return c==='B' ? '<span class="tag tag-b">企业 B</span>' : (c==='C' ? '<span class="tag tag-c">个人 C</span>' : (c==='BC' ? '<span class="tag tag-bc">双推 BC</span>' : '<span class="muted">—</span>')); }
 function scoreHtml(s){ const n=Number(s)||0; const cls=n>=80?'high':(n>=60?'mid':'low'); return '<span class="score '+cls+'">'+n+'</span>'; }
 function switchTab(t){ document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+t)); }
 function loadAll(){ loadOverview(); loadListings(1); loadRecommend(); loadChanges(); }
@@ -316,6 +317,7 @@ async function loadOverview(){
       ['标的总数', d.total, '来自 '+d.by_source.length+' 个平台'],
       ['企业类 B', (d.by_category.find(x=>x.category==='B')||{}).n||0, '大额资产'],
       ['个人类 C', (d.by_category.find(x=>x.category==='C')||{}).n||0, '房产 / 资产'],
+      ['双推 BC', (d.by_category.find(x=>x.category==='BC')||{}).n||0, '≤300万大宗资产'],
       ['变更记录', d.changes, '价格 / 状态变动'],
       ['平均评分', d.avg_score, 'v2 评分 '+d.v2_count+' 条'],
       ['最近优选', d.latest_date||'—', d.recommendations+' 条推荐'],
@@ -375,7 +377,7 @@ async function showDetail(id){
     const color = v>=75?'var(--ok)':(v>=55?'var(--warn)':'var(--danger)');
     return '<div class="dim"><div class="n">'+(dimNames[k]||k)+'</div><div class="v '+cls+'">'+v+'</div><div class="track"><div class="fill" style="width:'+v+'%;background:'+color+'"></div></div></div>';
   }).join('') + '<div class="dim" style="grid-column:span 5;background:#e6f4ff"><div class="n">综合评分</div><div class="v high">'+x.score+'</div><div class="n">市场基准：'+esc(x.market_basis||'—')+'</div></div>';
-  const fields = [['ID',x.id],['来源',x.source],['分类',x.category==='B'?'企业类 B':'个人类 C'],['资产类型',x.asset_type],['地区',[x.province,x.city,x.district].filter(Boolean).join(' / ')],['面积',x.area_sqm?x.area_sqm+' ㎡':'—'],['挂牌价',x.price_yuan?money(x.price_yuan):'—'],['价格原文',x.price_text],['评估价',x.appraisal_yuan?money(x.appraisal_yuan):'—'],['折扣率',x.discount_rate?x.discount_rate:'—'],['单价',x.unit_price?x.unit_price+' 元/㎡':'—'],['截止时间',x.deadline],['转让方',x.seller],['转让方等级',x.seller_grade],['二次挂牌',x.second_listing?'是':'否'],['瑕疵说明',x.has_defect_note?'有':'无'],['用途',x.use_type],['发布时间',x.published_at],['采集时间',x.collected_at],['评分版本',x.scoring_version||'v1'],['原页',x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener">打开链接</a>':'—']];
+  const fields = [['ID',x.id],['来源',x.source],['分类',x.category==='B'?'企业类 B':(x.category==='BC'?'双推 BC（企业+个人）':'个人类 C')],['资产类型',x.asset_type],['地区',[x.province,x.city,x.district].filter(Boolean).join(' / ')],['面积',x.area_sqm?x.area_sqm+' ㎡':'—'],['挂牌价',x.price_yuan?money(x.price_yuan):'—'],['价格原文',x.price_text],['评估价',x.appraisal_yuan?money(x.appraisal_yuan):'—'],['折扣率',x.discount_rate?x.discount_rate:'—'],['单价',x.unit_price?x.unit_price+' 元/㎡':'—'],['截止时间',x.deadline],['转让方',x.seller],['转让方等级',x.seller_grade],['二次挂牌',x.second_listing?'是':'否'],['瑕疵说明',x.has_defect_note?'有':'无'],['用途',x.use_type],['发布时间',x.published_at],['采集时间',x.collected_at],['评分版本',x.scoring_version||'v1'],['原页',x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener">打开链接</a>':'—']];
   $('m-kv').innerHTML = fields.map(f=>'<div class="k">'+f[0]+'</div><div class="v">'+(f[1]||'—')+'</div>').join('');
   $('m-reasons').innerHTML = (x.score_reasons||[]).map(r=>'<span class="reason">'+esc(r)+'</span>').join('') || '<span class="muted">无</span>';
   $('modal').classList.add('show');

@@ -11,7 +11,7 @@ app:
 filter:
   geo_mode: nationwide        # nationwide=全国全量（已确认）；后续可切 focus_provinces
   focus_provinces: []         # 若 geo_mode=focus，填省份名，如 ["江苏","浙江","上海"]
-  bc_threshold_wan: 300       # B/C 分类金额阈值（万元），已确认
+  bc_threshold_wan: 300       # B/C 分类金额阈值（万元）；原属企业的大宗资产≤此值归 BC 双推
   personal_asset_types: [二手车, 二手设备, 闲置资产, 招租, 房产]
   business_asset_types: [土地, 矿业权, 股权, 债权]
 

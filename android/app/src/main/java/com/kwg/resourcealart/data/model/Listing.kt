@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * 统一标的数据模型，与服务端 listings 表 / 开发文档 §4.1 Schema 对齐。
- * category: B=企业类, C=个人类
+ * category: B=企业类, C=个人类, BC=双推（服务端在 B/C 两组各返回一条，App 无需区分）
  */
 @Serializable
 data class Listing(

@@ -31,7 +31,12 @@ def select(listings: list[Listing], config: dict) -> dict[str, list[Listing]]:
             from .scorer import score_listing
             score_listing(l, config)
             l.scoring_version = "v1"
-        grouped[l.category].append(l)
+        # BC 双推：同一标的同时进入企业 B 和个人 C 两个分组
+        if l.category == "BC":
+            grouped["B"].append(l)
+            grouped["C"].append(l)
+        elif l.category in grouped:
+            grouped[l.category].append(l)
 
     result = {}
     for cat in ("B", "C"):
