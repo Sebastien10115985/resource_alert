@@ -1,0 +1,28 @@
+# Android / Gradle
+.gradle/
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/.idea/
+*.iml
+android/build/
+android/app/build/
+android/captures/
+android/.externalNativeBuild/
+
+# Python
+__pycache__/
+*.py[cod]
+server/.venv/
+server/venv/
+server/data/*.db
+server/data/*.db-*
+.pytest_cache/
+.mypy_cache/
+
+# Logs / IDE / OS
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

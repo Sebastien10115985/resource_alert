@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">闲置资源优选</string>
+    <string name="tab_daily">每日优选</string>
+    <string name="tab_changes">变更追踪</string>
+    <string name="tab_me">我的</string>
+    <string name="tab_business">企业类</string>
+    <string name="tab_personal">个人类</string>
+    <string name="empty_hint">暂无数据，请先运行服务端采集</string>
+    <string name="loading">加载中…</string>
+</resources>

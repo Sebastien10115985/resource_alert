@@ -1,0 +1,8 @@
+# M1 服务端依赖（Python 3.11+）
+requests>=2.31,<3
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+PyYAML>=6.0,<7
+pydantic>=2.8,<3
+# 定时任务：Linux 可用系统 cron；本地/跨平台用 APScheduler
+APScheduler>=3.10,<4

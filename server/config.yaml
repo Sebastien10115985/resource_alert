@@ -1,0 +1,83 @@
+# ============================================================
+# 闲置资源优选推送 · 服务端配置（M1）
+# 所有阈值集中于此，改配置不改代码
+# ============================================================
+
+app:
+  name: 闲置资源优选
+  timezone: Asia/Shanghai
+
+# 分类与筛选
+filter:
+  geo_mode: nationwide        # nationwide=全国全量（已确认）；后续可切 focus_provinces
+  focus_provinces: []         # 若 geo_mode=focus，填省份名，如 ["江苏","浙江","上海"]
+  bc_threshold_wan: 300       # B/C 分类金额阈值（万元），已确认
+  personal_asset_types: [二手车, 二手设备, 闲置资产, 招租, 房产]
+  business_asset_types: [土地, 矿业权, 股权, 债权]
+
+# 评分权重（百分制，详见开发文档 §5.3/5.4）
+scoring:
+  business:
+    clear_title: 20           # 权属/证照清晰线索
+    use_match: 15
+    size_fit: 10
+    price_reasonable: 20
+    no_encumbrance: 15
+    no_eco_burden: 10
+    reliable_seller: 10
+    time_left: 5
+  personal:
+    discount_le_085: 30
+    discount_le_095: 18
+    discount_le_100: 8
+    discount_gt_120: -15
+    residential_low_unit: 20
+    second_listing: 12
+    seller_gov: 9
+    seller_exchange: 6
+    seller_enterprise: 3
+    deadline_ok: 5
+    deadline_expired: -20
+    defect_note: -3
+  residential_unit_threshold: 5000   # 住宅低单价阈值 元/㎡
+  non_residential_keywords: [车库, 车位, 商铺, 商业, 经营性, 厂房, 仓库, 办公楼, 写字楼, 市场, 门店, 铺面, 粮站, 工业, 车间, 土地使用权, 棚, 场地, 商住楼]
+
+# 每日优选
+selection:
+  top_n_per_category: 10
+  push_new_and_changed: true  # 变更即推
+  change_fields: [price_yuan, deadline, status]
+  run_time: "07:30"           # 每日定时
+
+# 数据源开关与采集礼仪
+sources:
+  land_market:
+    enabled: true
+    base: https://market.mnr.gov.cn/api
+    request_interval_sec: 0.3
+  mining:
+    enabled: true
+    base: https://ky.mnr.gov.cn/
+    request_interval_sec: 0.2
+    max_pages_per_column: 3
+  ejy:
+    enabled: true
+    base: https://www.ejy365.com
+    request_interval_sec: 0.15
+    max_detail_workers: 8
+    categories: [FC, CL, ESSB, WZ, FCZZ, GQ, ZQ, TD]
+  ggzy:
+    enabled: false            # 仅详情样本，M1 默认关闭
+    base: https://www.ggzy.gov.cn
+
+# 推送通道（密钥不要写进代码库，运行时用环境变量覆盖）
+push:
+  channels:
+    wecom_bot: ""             # 企业微信机器人 Webhook；或用环境变量 WECOM_BOT_WEBHOOK
+    dingtalk_bot: ""          # 钉钉机器人 Webhook；或环境变量 DINGTALK_BOT_WEBHOOK
+    serverchan_key: ""        # Server酱 sendkey；或环境变量 SERVERCHAN_KEY
+  enabled: false              # 未配置密钥时保持关闭，避免误推
+
+# 存储
+storage:
+  db_path: data/listings.db   # SQLite（M1）；上量后可切云数据库

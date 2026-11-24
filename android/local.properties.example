@@ -1,0 +1,15 @@
+# 复制本文件为 local.properties（该文件已 gitignore，不进版本库）
+# SDK 路径（Android Studio 通常自动生成，若没有可手动指定）
+sdk.dir=C\:\\Users\\lvhe\\AppData\\Local\\Android\Sdk
+
+# 服务端 API 地址
+# ── 模拟器调试 ──────────────────────────────────────────
+# 用 localhost + adb reverse（每次重启模拟器/重连 USB 后需重做一次）：
+#   adb reverse tcp:8000 tcp:8000
+# 这是把模拟器的 localhost:8000 转发到电脑的 127.0.0.1:8000。
+# 注意：部分新版模拟器(如 API 37)的 10.0.2.2 NAT 不通，故不用 10.0.2.2。
+api.base.url=http://localhost:8000
+
+# ── 真机调试 ────────────────────────────────────────────
+# 改成电脑在局域网的 IP（手机与电脑须同 WiFi），例如：
+# api.base.url=http://192.168.1.23:8000

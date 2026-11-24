@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- M1 本地调试：允许明文 HTTP（真机局域网 IP / 模拟器 10.0.2.2） -->
+    <base-config cleartextTrafficPermitted="true" />
+    <!-- 正式上线后改成：仅对 API 域名放开，其余禁明文
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.example.com</domain>
+    </domain-config>
+    -->
+</network-security-config>
