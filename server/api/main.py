@@ -11,8 +11,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from common import load_config, ROOT, Listing
+from api.admin import router as admin_router
 
 app = FastAPI(title="闲置资源优选 API", version="0.1.0-M1")
+app.include_router(admin_router)
 
 # M1 本地调试：允许局域网任意来源；正式上线收紧为具体域名
 app.add_middleware(

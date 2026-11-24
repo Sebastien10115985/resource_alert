@@ -28,7 +28,8 @@ cd C:\kwg\resource_alert\server
 .\.venv\Scripts\Activate.ps1
 python run_daily.py --dry --no-push      # 重算优选
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
-# 浏览器打开 http://localhost:8000/docs
+# 浏览器打开 http://localhost:8000/docs 看接口
+# 浏览器打开 http://localhost:8000/admin 看数据后台（表格/筛选/详情）
 ```
 Git Bash 用 `source .venv/Scripts/activate`；PowerShell 里**不要**用 `activate.bat`（那是 CMD 的）。
 不激活也可以，把 `python` 换成 `.venv\Scripts\python.exe`。

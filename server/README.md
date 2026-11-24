@@ -12,6 +12,7 @@ server/
 ├── pipeline/            # classifier / scorer / selector / notifier
 ├── db/store.py          # SQLite 存储 + 变更检测
 ├── api/main.py          # FastAPI，供 App 拉取
+├── api/admin.py         # 后台数据查看页（/admin）+ 只读 API
 └── data/listings.db     # 运行后生成
 ```
 
@@ -70,11 +71,24 @@ python run_daily.py --dry --no-push
 python run_daily.py --no-push
 
 # 3) 启动 API（另开一个终端，同样先激活 venv）
-python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn api.main:app --port 8000
 # 浏览器打开 http://localhost:8000/docs 看接口
+# 浏览器打开 http://localhost:8000/admin 看人类可读的数据后台
 ```
 
 > 不激活 venv 时，把所有 `python` 换成 `.venv/Scripts/python.exe` 即可。
+
+## 后台数据查看页（/admin）
+
+API 服务启动后，浏览器访问 **http://localhost:8000/admin** ，后台维护人员可直接以表格方式查阅采集数据，无需懂 JSON：
+
+- **总览**：标的总数、B/C 分类数、变更数、最近优选日期；来源分布和评分分布条形图
+- **标的库**：按标题/卖方/ID 搜索，按来源、分类、最低评分筛选，按评分/时间/价格排序，20 条/页翻页
+- **每日优选**：按日期和 B/C 分类查看 Top-N，含排名、评分、评分理由
+- **变更记录**：价格/截止时间/状态变动历史
+- **详情弹窗**：全字段查看、评分理由标签、原网页链接
+
+该页面是**只读**的，不影响 App 使用的接口；配套 API 前缀为 `/api/admin/`（overview / listings / recommendations / changes）。
 
 ## 推送配置（可选）
 M1 默认 `push.enabled: false`。要启用，二选一：
