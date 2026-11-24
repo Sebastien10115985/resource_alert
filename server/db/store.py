@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS listings (
     second_listing INTEGER DEFAULT 0, has_defect_note INTEGER DEFAULT 0,
     use_type TEXT, url TEXT, published_at TEXT, collected_at TEXT,
     score INTEGER DEFAULT 0, score_reasons TEXT, raw TEXT,
+    value_score REAL DEFAULT 0, title_score REAL DEFAULT 0,
+    risk_score REAL DEFAULT 0, seller_score REAL DEFAULT 0, time_score REAL DEFAULT 0,
+    score_detail TEXT, market_basis TEXT DEFAULT '', scoring_version TEXT DEFAULT 'v1',
     UNIQUE(source, external_id)
 );
 CREATE INDEX IF NOT EXISTS idx_listings_cat ON listings(category);
@@ -58,7 +61,25 @@ class Store:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self):
+        """旧库补列：Schema 新增字段时平滑升级，不丢历史数据。"""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(listings)")}
+        additions = {
+            "value_score": "REAL DEFAULT 0",
+            "title_score": "REAL DEFAULT 0",
+            "risk_score": "REAL DEFAULT 0",
+            "seller_score": "REAL DEFAULT 0",
+            "time_score": "REAL DEFAULT 0",
+            "score_detail": "TEXT",
+            "market_basis": "TEXT DEFAULT ''",
+            "scoring_version": "TEXT DEFAULT 'v1'",
+        }
+        for name, decl in additions.items():
+            if name not in cols:
+                self.conn.execute(f"ALTER TABLE listings ADD COLUMN {name} {decl}")
 
     def upsert_listing(self, listing: Listing) -> bool:
         """写入或更新标的。返回 True 表示有新变更（新增或 WATCH_FIELDS 变化）。"""
@@ -91,7 +112,7 @@ class Store:
     def _insert(self, d: dict):
         d = dict(d)
         # SQLite 不支持 list/dict，JSON 序列化
-        for k in ("score_reasons",):
+        for k in ("score_reasons", "score_detail"):
             if isinstance(d.get(k), (list, dict)):
                 d[k] = json.dumps(d[k], ensure_ascii=False)
         if isinstance(d.get("raw"), (list, dict)):
@@ -124,8 +145,18 @@ class Store:
                 )
                 # 回写评分与理由到 listings，供 API/App 展示
                 self.conn.execute(
-                    "UPDATE listings SET score=?, score_reasons=?, category=? WHERE id=?",
-                    (it.score, json.dumps(it.score_reasons, ensure_ascii=False), cat, lid),
+                    """UPDATE listings SET score=?, score_reasons=?, category=?,
+                       value_score=?, title_score=?, risk_score=?, seller_score=?, time_score=?,
+                       score_detail=?, market_basis=?, scoring_version=? WHERE id=?""",
+                    (
+                        it.score, json.dumps(it.score_reasons, ensure_ascii=False), cat,
+                        getattr(it, "value_score", 0), getattr(it, "title_score", 0),
+                        getattr(it, "risk_score", 0), getattr(it, "seller_score", 0),
+                        getattr(it, "time_score", 0),
+                        json.dumps(getattr(it, "score_detail", {}), ensure_ascii=False),
+                        getattr(it, "market_basis", ""), getattr(it, "scoring_version", "v1"),
+                        lid,
+                    ),
                 )
         self.conn.commit()
 

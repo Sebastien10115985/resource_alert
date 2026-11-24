@@ -75,6 +75,13 @@ def main():
             use_type=r["use_type"] or "", url=r["url"] or "", published_at=r["published_at"] or "",
             collected_at=r["collected_at"] or "", score=r["score"] or 0,
             score_reasons=[], raw=r["raw"] or "",
+            value_score=r["value_score"] if "value_score" in r.keys() else 0,
+            title_score=r["title_score"] if "title_score" in r.keys() else 0,
+            risk_score=r["risk_score"] if "risk_score" in r.keys() else 0,
+            seller_score=r["seller_score"] if "seller_score" in r.keys() else 0,
+            time_score=r["time_score"] if "time_score" in r.keys() else 0,
+            market_basis=r["market_basis"] if "market_basis" in r.keys() else "",
+            scoring_version=r["scoring_version"] if "scoring_version" in r.keys() else "v1",
         )
         listings.append(l)
 

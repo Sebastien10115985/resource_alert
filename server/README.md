@@ -9,8 +9,9 @@ server/
 ├── run_daily.py         # 每日主流程：采集→评分→入库→优选→推送
 ├── scheduler.py         # APScheduler 定时（每日 07:30）
 ├── collectors/          # 采集器：land_market / mining / ejy
-├── pipeline/            # classifier / scorer / selector / notifier
-├── db/store.py          # SQLite 存储 + 变更检测
+├── pipeline/            # classifier / scorer(旧) / value_scorer(v2) / selector / notifier
+├── db/store.py          # SQLite 存储 + 变更检测 + 旧库迁移
+├── rescore.py           # 用当前算法重算全库分数并回写（不重新采集）
 ├── api/main.py          # FastAPI，供 App 拉取
 ├── api/admin.py         # 后台数据查看页（/admin）+ 只读 API
 └── data/listings.db     # 运行后生成
@@ -89,6 +90,30 @@ API 服务启动后，浏览器访问 **http://localhost:8000/admin** ，后台�
 - **详情弹窗**：全字段查看、评分理由标签、原网页链接
 
 该页面是**只读**的，不影响 App 使用的接口；配套 API 前缀为 `/api/admin/`（overview / listings / recommendations / changes）。
+
+## 评分算法 v2（性价比 / 风险）
+
+`config.yaml` 的 `value_scoring.enabled: true` 时启用 v2，把五个维度**融合成单一 score**（0-100，越高越好）：
+
+| 维度 | 含义 | 低分条件 |
+|---|---|---|
+| `value` 性价比 | 挂牌价 / 市场基准 | 明显超市场价值 |
+| `title` 权属清晰 | 证照、出让线索 | 无证、划拨、权属不清 |
+| `risk` 安全度 | 抵押查封/债务/治理义务 | 风险线索多、二次挂牌、瑕疵 |
+| `seller` 挂牌方 | 政府/国资 > 产权机构 > 企业 | 卖方不可靠 |
+| `time` 时效 | 剩余挂牌时间 | 已截止、不足 3 天 |
+
+**市场价基准**：评估价优先 → 同类城市单价中位数兜底 → 同类单价中位数 → 都没有则给中性分 50 并标注「无基准」，不虚高。
+
+**不同类型走不同算法**：`value_scoring.profiles` 按 `asset_type`（房产/土地/矿业权/二手车/股权/债权…）配置各自的权重、风险关键词、权属关键词。矿业权无价格，权重偏向权属(0.30)和安全(0.38)；二手车/设备偏性价比(0.42)。
+
+**重算分数**（改完配置或首次升级后）：
+```bash
+python rescore.py --limit 5   # 抽查前 5 条明细，调参用
+python rescore.py             # 全量重算 + 回写 + 重排当日推荐
+```
+
+> 当前库 1563 条已全部重算为 v2，均分 61.2。因为多数标的缺价格/评估价，性价比只能给中性分——这是数据现实，接入更多带评估价的源后会改善。旧的 B/C 评分仍在 `pipeline/scorer.py`，把 `value_scoring.enabled` 设为 false 即可回退。
 
 ## 推送配置（可选）
 M1 默认 `push.enabled: false`。要启用，二选一：

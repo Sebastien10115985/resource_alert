@@ -30,6 +30,10 @@ def _row(r):
         d["score_reasons"] = json.loads(d.get("score_reasons") or "[]")
     except Exception:
         d["score_reasons"] = []
+    try:
+        d["score_detail"] = json.loads(d.get("score_detail") or "{}")
+    except Exception:
+        d["score_detail"] = {}
     for k in ("second_listing", "has_defect_note"):
         d[k] = bool(d.get(k))
     return d
@@ -56,6 +60,8 @@ def admin_overview():
     changes = c.execute("SELECT COUNT(*) FROM listing_changes").fetchone()[0]
     latest = c.execute("SELECT MAX(date) FROM recommendations").fetchone()[0] or ""
     rec_count = c.execute("SELECT COUNT(*) FROM recommendations").fetchone()[0]
+    v2 = c.execute("SELECT COUNT(*) FROM listings WHERE scoring_version='v2'").fetchone()[0]
+    avg = c.execute("SELECT ROUND(AVG(score),1) FROM listings").fetchone()[0] or 0
     c.close()
     return {
         "total": total,
@@ -65,6 +71,8 @@ def admin_overview():
         "changes": changes,
         "latest_date": latest,
         "recommendations": rec_count,
+        "v2_count": v2,
+        "avg_score": avg,
     }
 
 
@@ -92,6 +100,9 @@ def admin_listings(
     w = " AND ".join(where)
     order = {
         "score": "score DESC, collected_at DESC",
+        "value": "value_score DESC",
+        "risk": "risk_score DESC",
+        "title": "title_score DESC",
         "price_asc": "price_yuan ASC",
         "price_desc": "price_yuan DESC",
         "newest": "collected_at DESC",
@@ -214,6 +225,13 @@ a:hover{text-decoration:underline}
 .kv .v{word-break:break-word}
 .reasons{display:flex;flex-wrap:wrap;gap:6px}
 .reason{background:#f0f5ff;color:#1d39c4;padding:3px 9px;border-radius:12px;font-size:12px}
+.dims{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.dim{text-align:center;background:var(--bg);border-radius:8px;padding:10px 6px}
+.dim .n{font-size:11px;color:var(--muted)}
+.dim .v{font-size:20px;font-weight:600;margin:4px 0}
+.dim .track{height:5px;border-radius:3px;background:var(--border);overflow:hidden}
+.dim .fill{height:100%;border-radius:3px}
+@media(max-width:600px){.dims{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:800px){.wrap{padding:12px}.kv{grid-template-columns:90px 1fr}table{font-size:12px}}
 </style>
 </head>
@@ -243,10 +261,10 @@ a:hover{text-decoration:underline}
       <select id="f-source" onchange="loadListings(1)"><option value="">全部来源</option></select>
       <select id="f-category" onchange="loadListings(1)"><option value="">全部分类</option><option value="B">企业类 B</option><option value="C">个人类 C</option></select>
       <select id="f-score" onchange="loadListings(1)"><option value="0">全部评分</option><option value="60">≥60</option><option value="70">≥70</option><option value="80">≥80</option></select>
-      <select id="f-sort" onchange="loadListings(1)"><option value="score">按评分</option><option value="newest">按采集时间</option><option value="price_asc">价格从低到高</option><option value="price_desc">价格从高到低</option></select>
+      <select id="f-sort" onchange="loadListings(1)"><option value="score">按综合分</option><option value="value">按性价比分</option><option value="risk">按安全分</option><option value="title">按权属分</option><option value="newest">按采集时间</option><option value="price_asc">价格从低到高</option><option value="price_desc">价格从高到低</option></select>
       <button class="primary" onclick="loadListings(1)">查询</button>
     </div>
-    <table><thead><tr><th>评分</th><th>分类</th><th>标题</th><th>来源</th><th>类型</th><th>地区</th><th>价格</th><th>截止</th><th>操作</th></tr></thead><tbody id="tb-listings"></tbody></table>
+    <table><thead><tr><th>综合</th><th>性价比</th><th>安全</th><th>分类</th><th>标题</th><th>类型</th><th>价格</th><th>截止</th><th>操作</th></tr></thead><tbody id="tb-listings"></tbody></table>
     <div class="pager"><span id="pg-info"></span><div class="btns"><button onclick="loadListings(page-1)" id="pg-prev">上一页</button><button onclick="loadListings(page+1)" id="pg-next">下一页</button></div></div>
   </div>
 </section>
@@ -272,6 +290,7 @@ a:hover{text-decoration:underline}
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-head"><h2 id="m-title">详情</h2><button onclick="closeModal()">关闭</button></div>
+    <div class="dims" id="m-dims"></div>
     <div class="kv" id="m-kv"></div>
     <h3>评分理由</h3><div class="reasons" id="m-reasons"></div>
   </div>
@@ -298,6 +317,7 @@ async function loadOverview(){
       ['企业类 B', (d.by_category.find(x=>x.category==='B')||{}).n||0, '大额资产'],
       ['个人类 C', (d.by_category.find(x=>x.category==='C')||{}).n||0, '房产 / 资产'],
       ['变更记录', d.changes, '价格 / 状态变动'],
+      ['平均评分', d.avg_score, 'v2 评分 '+d.v2_count+' 条'],
       ['最近优选', d.latest_date||'—', d.recommendations+' 条推荐'],
     ].map(x=>'<div class="stat"><div class="label">'+x[0]+'</div><div class="value">'+x[1]+'</div><div class="hint">'+esc(x[2])+'</div></div>').join('');
     const maxS = Math.max(1,...d.by_source.map(x=>x.n));
@@ -315,9 +335,9 @@ async function loadListings(p){
     totalPages = Math.max(1, Math.ceil(d.total/d.page_size));
     if($('f-source').options.length===1){ d.items.forEach(()=>{}); }
     $('tb-listings').innerHTML = d.items.map(x=>'<tr>'+
-      '<td>'+scoreHtml(x.score)+'</td><td>'+catTag(x.category)+'</td>'+
-      '<td class="limit">'+cut(x.title)+'</td><td>'+esc(x.source)+'</td><td>'+esc(x.asset_type||'—')+'</td>'+
-      '<td>'+esc([x.province,x.city,x.district].filter(Boolean).join('')||'—')+'</td>'+
+      '<td>'+scoreHtml(x.score)+'</td><td>'+scoreHtml(x.value_score)+'</td><td>'+scoreHtml(x.risk_score)+'</td>'+
+      '<td>'+catTag(x.category)+'</td>'+
+      '<td class="limit">'+cut(x.title)+'</td><td>'+esc(x.asset_type||'—')+'</td>'+
       '<td class="money">'+money(x.price_yuan)+'</td><td>'+date(x.deadline)+'</td>'+
       '<td><button onclick="showDetail(\''+esc(x.id)+'\')">详情</button>'+(x.url?' <a href="'+esc(x.url)+'" target="_blank" rel="noopener">原页</a>':'')+'</td></tr>').join('') || '<tr><td colspan="9" class="empty">没有符合条件的记录</td></tr>';
     $('pg-info').textContent = '第 '+page+' / '+totalPages+' 页 · 共 '+d.total+' 条';
@@ -348,7 +368,14 @@ async function showDetail(id){
   let x; try{ x = await api('/api/admin/listings/'+encodeURIComponent(id)); }catch(e){ alert('详情加载失败'); return; }
   if(x.error){ alert('未找到该记录'); return; }
   $('m-title').textContent = x.title||'（无标题）';
-  const fields = [['ID',x.id],['来源',x.source],['分类',x.category==='B'?'企业类 B':'个人类 C'],['资产类型',x.asset_type],['地区',[x.province,x.city,x.district].filter(Boolean).join(' / ')],['面积',x.area_sqm?x.area_sqm+' ㎡':'—'],['挂牌价',x.price_yuan?money(x.price_yuan):'—'],['价格原文',x.price_text],['评估价',x.appraisal_yuan?money(x.appraisal_yuan):'—'],['折扣率',x.discount_rate?x.discount_rate:'—'],['单价',x.unit_price?x.unit_price+' 元/㎡':'—'],['截止时间',x.deadline],['转让方',x.seller],['转让方等级',x.seller_grade],['二次挂牌',x.second_listing?'是':'否'],['瑕疵说明',x.has_defect_note?'有':'无'],['用途',x.use_type],['发布时间',x.published_at],['采集时间',x.collected_at],['评分',x.score],['原页',x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener">打开链接</a>':'—']];
+  const dimNames = {value:'性价比',title:'权属',risk:'安全',seller:'挂牌方',time:'时效'};
+  const detail = x.score_detail || {value:x.value_score,title:x.title_score,risk:x.risk_score,seller:x.seller_score,time:x.time_score};
+  $('m-dims').innerHTML = ['value','title','risk','seller','time'].map(k=>{
+    const v = Number(detail[k]||0); const cls=v>=75?'high':(v>=55?'mid':'low');
+    const color = v>=75?'var(--ok)':(v>=55?'var(--warn)':'var(--danger)');
+    return '<div class="dim"><div class="n">'+(dimNames[k]||k)+'</div><div class="v '+cls+'">'+v+'</div><div class="track"><div class="fill" style="width:'+v+'%;background:'+color+'"></div></div></div>';
+  }).join('') + '<div class="dim" style="grid-column:span 5;background:#e6f4ff"><div class="n">综合评分</div><div class="v high">'+x.score+'</div><div class="n">市场基准：'+esc(x.market_basis||'—')+'</div></div>';
+  const fields = [['ID',x.id],['来源',x.source],['分类',x.category==='B'?'企业类 B':'个人类 C'],['资产类型',x.asset_type],['地区',[x.province,x.city,x.district].filter(Boolean).join(' / ')],['面积',x.area_sqm?x.area_sqm+' ㎡':'—'],['挂牌价',x.price_yuan?money(x.price_yuan):'—'],['价格原文',x.price_text],['评估价',x.appraisal_yuan?money(x.appraisal_yuan):'—'],['折扣率',x.discount_rate?x.discount_rate:'—'],['单价',x.unit_price?x.unit_price+' 元/㎡':'—'],['截止时间',x.deadline],['转让方',x.seller],['转让方等级',x.seller_grade],['二次挂牌',x.second_listing?'是':'否'],['瑕疵说明',x.has_defect_note?'有':'无'],['用途',x.use_type],['发布时间',x.published_at],['采集时间',x.collected_at],['评分版本',x.scoring_version||'v1'],['原页',x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener">打开链接</a>':'—']];
   $('m-kv').innerHTML = fields.map(f=>'<div class="k">'+f[0]+'</div><div class="v">'+(f[1]||'—')+'</div>').join('');
   $('m-reasons').innerHTML = (x.score_reasons||[]).map(r=>'<span class="reason">'+esc(r)+'</span>').join('') || '<span class="muted">无</span>';
   $('modal').classList.add('show');

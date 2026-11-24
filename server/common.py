@@ -70,6 +70,15 @@ class Listing:
     collected_at: str = field(default_factory=now_iso)
     score: int = 0
     score_reasons: list = field(default_factory=list)
+    # v2 评分明细（性价比/权属/安全/挂牌方/时效，0-100）
+    value_score: float = 0
+    title_score: float = 0
+    risk_score: float = 0
+    seller_score: float = 0
+    time_score: float = 0
+    score_detail: dict = field(default_factory=dict)
+    market_basis: str = ""
+    scoring_version: str = "v1"
     raw: str = ""
 
     @property

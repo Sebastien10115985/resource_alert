@@ -42,6 +42,85 @@ scoring:
   residential_unit_threshold: 5000   # 住宅低单价阈值 元/㎡
   non_residential_keywords: [车库, 车位, 商铺, 商业, 经营性, 厂房, 仓库, 办公楼, 写字楼, 市场, 门店, 铺面, 粮站, 工业, 车间, 土地使用权, 棚, 场地, 商住楼]
 
+# ============================================================
+# v2 性价比/风险综合评分（融合为单一 score，0-100 越高越好）
+# 五维度 value/title/risk/seller/time，按 asset_type 走不同权重；
+# 每类资产可单独覆盖关键词和风险扣分。详见 scoring/value_scorer.py。
+# ============================================================
+value_scoring:
+  enabled: true                 # false 时回退到上面旧的 B/C 评分
+  discount_bands:               # 挂牌价 / 市场基准
+    - {max: 0.50, score: 95, label: "五折以下"}
+    - {max: 0.70, score: 85, label: "七折以下"}
+    - {max: 0.85, score: 72, label: "八五折以下"}
+    - {max: 1.00, score: 58, label: "不高于基准"}
+    - {max: 1.20, score: 38, label: "略高于基准"}
+    - {max: null, score: 12, label: "明显超市场价值"}
+  seller_grades: &seller_grades
+    "人民政府|管委会|管理委员会|国资|财政局|街道办|镇政府": ["政府/国资", 92]
+    "产权交易|交易所|交易中心|产权服务": ["产权机构", 84]
+    "银行|保险|资产管理|信托": ["金融机构", 74]
+    "拍卖": ["拍卖机构", 72]
+  time_bands: &time_bands
+    - {min: 30, max: null, score: 92, label: "剩余30天以上"}
+    - {min: 7,  max: 30,   score: 80, label: "剩余7-30天"}
+    - {min: 3,  max: 7,    score: 65, label: "剩余3-7天"}
+    - {min: 0,  max: 3,    score: 50, label: "不足3天"}
+    - {min: null, max: 0,  score: 15, label: "已截止"}
+
+  profiles:
+    # 房产：价格/权属权重高
+    房产:
+      weights: {value: 0.38, title: 0.22, risk: 0.22, seller: 0.08, time: 0.10}
+      title: {base: 60, positive: [不动产权证, 权属清晰, 有证, 商品房, 住宅], negative: [无证, 划拨, 临时建筑, 违章]}
+      risk:  {base: 76, keywords: [抵押, 查封, 冻结, 诉讼, 纠纷, 凶宅, 瑕疵, 占用, 长期租赁], step: 11}
+    # 土地：权属与治理义务权重高
+    土地:
+      weights: {value: 0.30, title: 0.28, risk: 0.25, seller: 0.10, time: 0.07}
+      title: {base: 58, positive: [出让, 国有建设用地, 权属清晰, 有证], negative: [划拨, 集体土地, 未取得, 权属不清]}
+      risk:  {base: 74, keywords: [抵押, 查封, 生态修复, 治理义务, 复垦, 污染, 纠纷, 在租], step: 12}
+    # 矿业权：治理义务和出让合规是关键，几乎无价格基准
+    矿业权:
+      weights: {value: 0.12, title: 0.30, risk: 0.38, seller: 0.12, time: 0.08}
+      title: {base: 55, positive: [挂牌出让, 出让, 探矿权, 采矿权, 权属清晰], negative: [无证, 越界, 争议, 未取得]}
+      risk:  {base: 72, keywords: [生态修复, 治理义务, 复垦, 矿坑, 污染, 地质灾害, 纠纷, 查封, 抵押], step: 14}
+    # 二手车/设备：价格权重高，关注报废瑕疵
+    二手车:
+      weights: {value: 0.42, title: 0.10, risk: 0.30, seller: 0.10, time: 0.08}
+      risk:  {base: 78, keywords: [报废, 事故, 泡水, 大修, 瑕疵, 查封, 抵押], step: 13}
+    二手设备:
+      weights: {value: 0.42, title: 0.10, risk: 0.30, seller: 0.10, time: 0.08}
+      risk:  {base: 78, keywords: [报废, 故障, 老旧, 瑕疵, 查封, 抵押], step: 13}
+    # 股权/债权：关注底层债务和卖方
+    股权:
+      weights: {value: 0.30, title: 0.15, risk: 0.32, seller: 0.15, time: 0.08}
+      risk:  {base: 72, keywords: [债务, 担保, 被执行, 诉讼, 亏损, 资不抵债, 纠纷], step: 13}
+    债权:
+      weights: {value: 0.35, title: 0.12, risk: 0.33, seller: 0.12, time: 0.08}
+      risk:  {base: 70, keywords: [不良, 呆账, 被执行人, 无财产, 诉讼, 担保, 纠纷], step: 14}
+    增资扩股:
+      weights: {value: 0.28, title: 0.15, risk: 0.32, seller: 0.17, time: 0.08}
+    招租:
+      weights: {value: 0.34, title: 0.16, risk: 0.20, seller: 0.10, time: 0.20}
+      risk:  {base: 78, keywords: [在租, 占用, 纠纷, 临时, 无证], step: 12}
+    闲置资产:
+      weights: {value: 0.38, title: 0.14, risk: 0.26, seller: 0.12, time: 0.10}
+      risk:  {base: 76, keywords: [报废, 故障, 老旧, 瑕疵, 查封, 抵押, 无产权, 纠纷], step: 13}
+    工美藏品:
+      weights: {value: 0.42, title: 0.12, risk: 0.28, seller: 0.12, time: 0.06}
+      risk:  {base: 74, keywords: [仿品, 瑕疵, 赝品, 争议], step: 16}
+    在建工程:
+      weights: {value: 0.28, title: 0.24, risk: 0.32, seller: 0.10, time: 0.06}
+      risk:  {base: 68, keywords: [烂尾, 停工, 债务, 查封, 抵押, 纠纷], step: 14}
+    其他:
+      weights: {value: 0.32, title: 0.16, risk: 0.28, seller: 0.14, time: 0.10}
+    default:
+      weights: {value: 0.32, title: 0.16, risk: 0.28, seller: 0.14, time: 0.10}
+      seller: {base: 55, grades: *seller_grades}
+      time:   {base: 60, no_deadline: 60, bands: *time_bands}
+      risk:   {base: 75, keywords: [抵押, 查封, 冻结, 诉讼, 纠纷, 债务, 担保, 被执行, 生态修复, 治理义务, 复垦, 污染, 瑕疵], step: 12}
+      title:  {base: 60, positive: [出让, 权属清晰, 有证, 不动产权证], negative: [无证, 划拨, 权属不清]}
+
 # 每日优选
 selection:
   top_n_per_category: 10
