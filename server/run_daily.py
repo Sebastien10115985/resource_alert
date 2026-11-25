@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import load_config, ROOT
 from db.store import Store
 from collectors import build_collectors
+from collectors.scheduler import CollectionScheduler, THROTTLED
 from pipeline.selector import select
 from pipeline.notifier import push_daily
 
@@ -34,23 +35,29 @@ def main():
         collectors = build_collectors(cfg)
         if not collectors:
             print("警告：没有启用的数据源，请检查 config.yaml sources.*.enabled")
-        all_listings = []
-        for c in collectors:
-            print(f"\n[采集] {c.name} ...", flush=True)
-            try:
-                items = c.collect()
-                print(f"  {c.name} 采集 {len(items)} 条", flush=True)
-            except Exception as e:
-                print(f"  {c.name} 失败: {str(e)[:120]}", flush=True)
-                store.mark_source(c.name, f"error: {str(e)[:60]}", 0)
-                items = []
+
+        def on_result(r):
+            """每抓完一个站点即时入库，并打印分组/冷却信息。"""
+            tag = "反爬组" if r.group == THROTTLED else "免爬组"
+            extra = f" 已冷却 {r.waited_sec:.0f}s" if r.waited_sec > 1 else ""
+            print(f"\n[采集][{tag}] {r.collector} 第{r.attempt}次: {len(r.items)} 条{extra}",
+                  flush=True)
+            if r.error:
+                print(f"  失败: {r.error[:120]}", flush=True)
+            block = r.block_reason
             changed = 0
-            for it in items:
+            for it in r.items:
                 if store.upsert_listing(it):
                     changed += 1
-            store.mark_source(c.name, "ok", len(items))
-            print(f"  {c.name} 新增/变更 {changed} 条", flush=True)
-            all_listings += items
+            status = "ok" if not r.error else f"error: {r.error[:60]}"
+            if block and not r.items:
+                status = f"blocked: {block[:60]}"
+                print(f"  风控降级: {block[:120]}（{extra or '冷却后重试'}）", flush=True)
+            store.mark_source(r.collector, status, len(r.items))
+            print(f"  新增/变更 {changed} 条", flush=True)
+
+        scheduler = CollectionScheduler(collectors, cfg, on_result=on_result)
+        scheduler.run()
     else:
         rows = store.recommendations(date="")  # 触发读取；实际全量需从 listings 查
         print("[dry] 跳过采集，使用库中数据", flush=True)

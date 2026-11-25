@@ -290,6 +290,7 @@
 - 定时任务依赖会话/调度器常开能力；若运行环境不能保证每天触发，降级为自有小主机 cron 或 GitHub Actions cron，写库逻辑不变（只换触发方式）。
 - 密钥（Webhook、sendkey）放服务端配置，前端只有 `publishableKey`（本身无权限，靠 Origin 校验），不要把任何长期密钥写进 App 代码或日志。
 - 采集频率礼仪不变：每站每请求间隔 ≥ 0.2s、每日单站控制在数百次内、不登录不绕验证码。
+- **分组调度**（`collectors/scheduler.py`）：数据源按 `group` 分 open / throttled 两组。open 组连续抓；throttled 组 round-robin 轮询，同一站点两次采集任务间隔 ≥ `cooldown_sec`（默认 120 秒），抓完一个立刻换下一个，全部冷却时睡到最近站点到期；失败同样计入冷却，最多 `max_attempts` 次。冷却是"任务级"的（两次采集任务之间），与采集器内部"请求级"的 `request_interval_sec` 互补。
 
 > 现在文档阶段**不实际开通**云服务；进入 M1 编码、真正需要写库时再由 WorkBuddy 的可信确认界面开通环境（会有明确的授权确认，不会自动扣费）。
 

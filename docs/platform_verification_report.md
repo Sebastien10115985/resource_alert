@@ -24,7 +24,7 @@
 | 上海联合产权 suaee.com | 长三角国资 | ⭐ SPA | 未定位到公开列表 | 项目列表路径404 |
 | 北交所诉讼资产 otc.cbex.com | 诉讼资产 | ✗ 连接失败 | 无 | 网络不可达 |
 | 全国企业破产重整 pccz.court.gov.cn | 破产财产 | ⭐⭐ 接口可用(前日验证) | 接口POST searchKey/gjsslb | 全文匹配易混外地案号 |
-| 阿里拍卖破产强清 susong.taobao.com | 实际出价 | ⭐⭐ WebFetch可读 | 详情页渲染可读 | 直连跳登录 |
+| 阿里拍卖破产强清 susong.taobao.com | 实际出价 | ⭐⭐ WebFetch可读 | 详情页渲染可读 | 直连跳登录；mtop 接口需 token 签名见 §六 |
 | 京东拍卖破产强清 auction.jd.com | 实际出价 | ⭐ 空壳 | 无 | 仅157字节 |
 | 南京公共资源 njggzy.nanjing.gov.cn | 地方产权 | ⭐ nginx默认页 | 无 | 根路径非业务入口 |
 | 中国土地市场网 landchina.mnr.gov.cn | — | ✗ 超时 | 无 | 45s超时 |
@@ -77,3 +77,24 @@
 - `market_mnr_listings.csv`：44条土地二级市场转让/求购/成交数据
 - `ggzy_samples.csv`：14条公共资源交易平台真实公告样本（详情页可达）
 - 采集脚本：`probe_platforms.py`、`collect_ky.py`、`collect_market_mnr.py`、`ggzy_samples.py`
+
+---
+
+## 六、补充实测（2026-11-25）：阿里拍卖与采集调度
+
+### 阿里拍卖 sf/susong.taobao.com — 不可自动化采集
+- `sf.taobao.com` / `zc.taobao.com` 首页 HTTP 200、约 274KB，但纯前端 Rax 渲染，静态 HTML 无标的列表。
+- `susong.taobao.com` 标题可见（"破产甩卖-阿里资产…"），数据同样前端渲染。
+- 老版 `item_list.htm` 是 GBK 静态页，但 `<div class="sf-item-list">` 列表容器为空；页面里出现的"33万/57万/101万"是**价格筛选项**，不是标的价，不可误当数据。
+- 数据接口 `mtop.taobao.datafront.invoke.auctionwalle` 直连返回 `FAIL_SYS_TOKEN_EMPTY::令牌为空`——必须先取页面 cookie 再按阿里规则签名。按合规原则**不做 token 伪造/签名绕过**，不接入自动采集。
+
+### 全国公共资源交易 ggzy.gov.cn — 站点改版，列表仍受限
+- 列表页路径已改版：`/information/dealList.html` → `/deal/dealList.html`。
+- 列表接口仍是 `POST /information/pubTradingInfo/getTradList`，带验证码（code 829）+ 限流（800/801）+ `X-Pass-Token` 校验；直连返回 404 风控页，**不硬闯**。
+- 详情页 `/information/deal/html/...` 仍是静态 HTML，直连 HTTP 200、标题与正文可读。
+- 已实现 `collectors/ggzy.py`（反爬组）：探测到风控即优雅降级返回 0 条并记录原因，靠调度器冷却 2 分钟后重试，不伪造数据。
+
+### 采集分组调度（应对限流/反爬站点的优化）
+- `collectors/scheduler.py` 把数据源分 open（免爬，连续抓）与 throttled（反爬，低频轮询）两组。
+- throttled 组 round-robin：每个站点抓一次换下一个，同一站点两次任务间隔 ≥ `cooldown_sec`（默认 120 秒），全部冷却时睡到最近到期站点；失败也计入冷却，最多 `max_attempts` 次。
+- 实测：免爬组连续抓 land_market 27 + mining 200 + ejy 836 条；ggzy 两次降级（间隔 2 分钟）均返回 0 条并记 `blocked`。假时钟单测验证轮询顺序与冷却间隔正确。

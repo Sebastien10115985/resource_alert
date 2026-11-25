@@ -129,25 +129,37 @@ selection:
   run_time: "07:30"           # 每日定时
 
 # 数据源开关与采集礼仪
+# group=open     无反爬：按注册顺序连续抓，站点间不额外等待
+# group=throttled 有限流/反爬：轮询抓取，同一站点两次任务间隔 cooldown_sec 秒
 sources:
   land_market:
     enabled: true
+    group: open
     base: https://market.mnr.gov.cn/api
     request_interval_sec: 0.3
   mining:
     enabled: true
+    group: open
     base: https://ky.mnr.gov.cn/
     request_interval_sec: 0.2
     max_pages_per_column: 3
   ejy:
     enabled: true
+    group: open
     base: https://www.ejy365.com
     request_interval_sec: 0.15
     max_detail_workers: 8
     categories: [FC, CL, ESSB, WZ, FCZZ, GQ, ZQ, TD]
   ggzy:
-    enabled: false            # 仅详情样本，M1 默认关闭
+    enabled: true             # 纳入反爬组启用测试：列表风控时优雅降级，靠冷却后重试
+    group: throttled
+    cooldown_sec: 120         # 同一站点两次采集任务至少间隔 2 分钟
+    max_attempts: 2           # 每轮最多尝试 2 次（间隔 2 分钟），避免无限重试
     base: https://www.ggzy.gov.cn
+    request_interval_sec: 0.5
+    page_size: 20
+    max_pages: 1
+    detail_limit: 10
 
 # 推送通道（密钥不要写进代码库，运行时用环境变量覆盖）
 push:
