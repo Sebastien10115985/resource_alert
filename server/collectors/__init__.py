@@ -3,12 +3,14 @@ from .land_market import LandMarketCollector
 from .mining import MiningCollector
 from .ejy import EJyCollector
 from .ggzy import GGzyCollector
+from .rmfysszc import RmfyCollector
 
 REGISTRY = {
     "land_market": LandMarketCollector,
     "mining": MiningCollector,
     "ejy": EJyCollector,
     "ggzy": GGzyCollector,
+    "rmfysszc": RmfyCollector,
 }
 
 

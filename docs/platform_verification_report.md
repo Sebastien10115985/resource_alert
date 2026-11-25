@@ -23,6 +23,7 @@
 | 北京产权交易所 cbex.com.cn | 国资/土地二级 | ✗ 521 | 无 | CDN拦截 |
 | 上海联合产权 suaee.com | 长三角国资 | ⭐ SPA | 未定位到公开列表 | 项目列表路径404 |
 | 北交所诉讼资产 otc.cbex.com | 诉讼资产 | ✗ 连接失败 | 无 | 网络不可达 |
+| **人民法院诉讼资产网 rmfysszc.gov.cn** | 司法拍卖房产/车/土地 | ⭐⭐⭐ 可抓（已接入） | 实测一轮 60 条当日公告，已入库 | 列表走 www1 域 POST /News/Handler.aspx；详情静态页可直连，含起拍/评估/保证金/面积；无验证码 |
 | 全国企业破产重整 pccz.court.gov.cn | 破产财产 | ⭐⭐ 接口可用(前日验证) | 接口POST searchKey/gjsslb | 全文匹配易混外地案号 |
 | 阿里拍卖破产强清 susong.taobao.com | 实际出价 | ⭐⭐ WebFetch可读 | 详情页渲染可读 | 直连跳登录；mtop 接口需 token 签名见 §六 |
 | 京东拍卖破产强清 auction.jd.com | 实际出价 | ⭐ 空壳 | 无 | 仅157字节 |
@@ -81,6 +82,17 @@
 ---
 
 ## 六、补充实测（2026-11-25）：阿里拍卖与采集调度
+
+### 阿里开放平台司法拍卖 API — 文档在但申请不到
+- 官方确有免费、免用户授权的司法拍卖接口：`taobao.auction.gov.get.latestbid`（含评估价 consult_price / 起拍价 init_price / 当前出价）、`get.auction.info`（含第几次拍卖、竞买结果、报名/出价次数、公告全文、优先购买人）、`get.auction.status`、`data.realtime.get`。
+- 但当前开放平台创建应用的业务类型只有"淘宝购物小程序/商家经营工具/小程序插件/阿里生态API开放/内容创作工具"，官方类目入驻规则（2026-02 更新）也不含"司法拍卖"或公共数据类——进入"阿里生态API开放"后类目只有闲鱼/饿了么等，**无拍卖入口**；叠加个人实名认证不满足应用软件开发商的企业资质要求。
+- 结论：这些接口面向早年已接入的特定合作方，新开发者自助注册拿不到权限。**不接 API，改走诉讼资产网静态页**。
+
+### 人民法院诉讼资产网 rmfysszc.gov.cn — 已接入
+- 列表接口：`POST https://www1.rmfysszc.gov.cn/News/Handler.aspx`，参数 `search/fid1/fid2/fid3/page/include`，返回 JSON（`html` 列表行 + `page` 分页）；**必须 www1 域**，www 主域同一路径返回错误页。
+- 每行含公告标题（`title` 属性）、法院名、发布日期（如 2026.11.25）、详情页链接；每页 21 条，按日期倒序，最新页即当日公告——适合每日增量。
+- 详情页：`https://www.rmfysszc.gov.cn/statichtml/rm_xmdetail/{id}.shtml` 静态页直连，可提取起拍价/评估价/保证金/面积/权证号/用途；注意数字夹空格（"5 00 0"）与"万元/元"混用，需归一化。评估价覆盖率约 1/6，起拍价约 6/10。
+- 已实现 `collectors/rmfysszc.py`（open 组，间隔 0.4s），只保留 `fresh_days`（7 天）内公告，标题识别资产类型；实测一轮抓 60 条当日公告并全部入库，有评估价的标的折扣 0.55~0.8，v2 性价比分能拉开到 85。
 
 ### 阿里拍卖 sf/susong.taobao.com — 不可自动化采集
 - `sf.taobao.com` / `zc.taobao.com` 首页 HTTP 200、约 274KB，但纯前端 Rax 渲染，静态 HTML 无标的列表。

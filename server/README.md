@@ -8,7 +8,7 @@ server/
 ├── common.py            # 统一 Schema(Listing)、数值解析、配置加载
 ├── run_daily.py         # 每日主流程：采集→评分→入库→优选→推送
 ├── scheduler.py         # APScheduler 定时（每日 07:30）
-├── collectors/          # 采集器：land_market / mining / ejy / ggzy + filter + scheduler(分组调度)
+├── collectors/          # 采集器：land_market / mining / ejy / ggzy / rmfysszc + filter + scheduler(分组调度)
 ├── pipeline/            # classifier / scorer(旧) / value_scorer(v2) / selector / notifier
 ├── db/store.py          # SQLite 存储 + 变更检测 + 旧库迁移
 ├── rescore.py           # 用当前算法重算全库分数并回写（不重新采集）
@@ -136,11 +136,13 @@ python rescore.py             # 全量重算 + 回写 + 重排当日推荐
 | `open`（免爬） | `group: open` | 按注册顺序连续抓，站点间不额外等待；采集器内部仍按 `request_interval_sec` 礼貌间隔 |
 | `throttled`（反爬/限流） | `group: throttled` + `cooldown_sec` + `max_attempts` | round-robin：每个站点抓一次就换下一个；**同一站点两次任务间隔 ≥ cooldown_sec**（默认 120 秒）；失败也计入冷却，最多重试 `max_attempts` 次 |
 
-当前分组：`land_market` / `mining` / `ejy` 为 open（实测无反爬）；`ggzy` 为 throttled。
+当前分组：`land_market` / `mining` / `ejy` / `rmfysszc` 为 open（实测无反爬）；`ggzy` 为 throttled。
+
+**rmfysszc（人民法院诉讼资产网）已接入**：列表走 `www1` 域 `POST /News/Handler.aspx`（`www` 主域同一接口返回错误页），返回 JSON 含标题/法院/发布日期/详情链接；详情页 `www` 域静态 `.shtml` 可直连，提取起拍价/评估价/保证金/面积/权证号，金额做了空格与"万元"归一化。只保留 `fresh_days`（默认 7 天）内的公告做每日增量，配置见 `sources.rmfysszc`。实测每轮抓 60 条（3 页），有评估价的标的值得关注（折扣 0.55~0.8 能拉开性价比分）。
 
 **ggzy 现状**：列表接口 `getTradList` 有验证码（code 829）+ 限流（code 800），直连返回 404/风控页，**不硬闯、不绕验证码**——采集器探测到风控就优雅降级返回 0 条并记录 `blocked` 原因，调度器冷却 2 分钟后重试。详情页是静态 HTML 可直连，作为后续扩展入口。
 
-**阿里拍卖（sf/susong.taobao.com）未接入**：实测走 mtop 网关 + token 签名（`FAIL_SYS_TOKEN_EMPTY`），未登录拿不到数据；按合规原则不做签名伪造。适合人工查或未来用带登录态的浏览器渲染方案。
+**阿里拍卖（sf/susong.taobao.com）未接入**：实测走 mtop 网关 + token 签名（`FAIL_SYS_TOKEN_EMPTY`），未登录拿不到数据；按合规原则不做签名伪造。虽有免费官方 API（`taobao.auction.gov.*`），但当前开放平台类目不含"司法拍卖"，个人开发者申请不到权限。适合人工查或未来用带登录态的浏览器渲染方案。
 
 调度器支持注入 `now_fn`/`sleep_fn`，单元测试用假时钟验证过轮询顺序和 2 分钟冷却，无需真等。
 

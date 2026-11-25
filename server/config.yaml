@@ -160,6 +160,13 @@ sources:
     page_size: 20
     max_pages: 1
     detail_limit: 10
+  rmfysszc:
+    enabled: true             # 人民法院诉讼资产网：列表 www1 接口 + 详情页静态页，无反爬
+    group: open
+    request_interval_sec: 0.4
+    max_pages: 3              # 列表页数（每页约 21 条当日公告）
+    max_detail: 60            # 每轮最多抓多少详情页
+    fresh_days: 7             # 只保留发布日期在 N 天内的公告
 
 # 推送通道（密钥不要写进代码库，运行时用环境变量覆盖）
 push:
