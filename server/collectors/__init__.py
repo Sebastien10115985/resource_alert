@@ -6,7 +6,7 @@ from .ggzy import GGzyCollector
 from .rmfysszc import RmfyCollector
 from .property_exchanges import (
     WuhanCollector, QinghaiCollector, GuizhouCollector,
-    ShenzhenCollector, XiamenCollector,
+    ShenzhenCollector, XiamenCollector, CspeaCollector,
 )
 
 REGISTRY = {
@@ -21,6 +21,8 @@ REGISTRY = {
     "guizhou_cqjy": GuizhouCollector,
     "shenzhen_sotcbb": ShenzhenCollector,
     "xiamen_cqjy": XiamenCollector,
+    # 全国产权行业信息化综合服务平台（聚合全国交易所）
+    "cspea_national": CspeaCollector,
 }
 
 

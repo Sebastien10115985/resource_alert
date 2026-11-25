@@ -207,6 +207,15 @@ sources:
     request_interval_sec: 0.5
     pages: 3
     page_size: 20
+  cspea_national:
+    enabled: true             # 全国产权行业信息化综合服务平台：SSR 列表内嵌 JSON，覆盖全国交易所
+    group: open
+    base: https://www.cspea.com.cn
+    request_interval_sec: 0.8
+    categories: [C01, C02, C03, C04, C05, C06]  # 资产转让/产权转让/企业增资/金融资产/不良资产/债权
+    status: A02,A03           # 正式披露/预披露，排除已成交
+    repeat: 3                 # 每类请求次数（列表在两组缓存间轮换，每次 12 条）
+    max_detail: 40            # 每轮最多抓多少详情页（补评估价与来源交易所）
 
 # 推送通道（密钥不要写进代码库，运行时用环境变量覆盖）
 push:

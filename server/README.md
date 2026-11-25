@@ -8,7 +8,7 @@ server/
 ├── common.py            # 统一 Schema(Listing)、数值解析、配置加载
 ├── run_daily.py         # 每日主流程：采集→评分→入库→优选→推送
 ├── scheduler.py         # APScheduler 定时（每日 07:30）
-├── collectors/          # 采集器：land_market / mining / ejy / ggzy / rmfysszc / property_exchanges(5家产权机构) + filter + scheduler
+├── collectors/          # 采集器：land_market / mining / ejy / ggzy / rmfysszc / property_exchanges(5家产权机构+cspea全国门户) + filter + scheduler
 ├── pipeline/            # classifier / scorer(旧) / value_scorer(v2) / selector / notifier
 ├── db/store.py          # SQLite 存储 + 变更检测 + 旧库迁移
 ├── rescore.py           # 用当前算法重算全库分数并回写（不重新采集）
@@ -136,7 +136,9 @@ python rescore.py             # 全量重算 + 回写 + 重排当日推荐
 | `open`（免爬） | `group: open` | 按注册顺序连续抓，站点间不额外等待；采集器内部仍按 `request_interval_sec` 礼貌间隔 |
 | `throttled`（反爬/限流） | `group: throttled` + `cooldown_sec` + `max_attempts` | round-robin：每个站点抓一次就换下一个；**同一站点两次任务间隔 ≥ cooldown_sec**（默认 120 秒）；失败也计入冷却，最多重试 `max_attempts` 次 |
 
-当前分组：`land_market` / `mining` / `ejy` / `rmfysszc` / `wuhan_ovupre` / `qinghai_cqjy` / `guizhou_cqjy` / `shenzhen_sotcbb` / `xiamen_cqjy` 为 open（实测无反爬）；`ggzy` 为 throttled。
+当前分组：`land_market` / `mining` / `ejy` / `rmfysszc` / `wuhan_ovupre` / `qinghai_cqjy` / `guizhou_cqjy` / `shenzhen_sotcbb` / `xiamen_cqjy` / `cspea_national` 为 open（实测无反爬）；`ggzy` 为 throttled。
+
+**cspea 全国门户**：`GET /list?c=C01..C06&s=A02,A03` 的 SSR 页面内嵌 `listData` JSON（项目编号/名称/底价万元/地区/披露期/来源交易所），详情页内嵌 `projectDetailData`（评估价/转让方/风险说明/源站链接）。列表每次返回最新 12 条且在两组缓存间轮换，`repeat: 3` 后 6 类合计去重约 65 条；`max_detail: 40` 控制详情请求量。一个源覆盖全国交易所，实测 40 条入库、33 条带评估价。
 
 **rmfysszc（人民法院诉讼资产网）已接入**：列表走 `www1` 域 `POST /News/Handler.aspx`（`www` 主域同一接口返回错误页），返回 JSON 含标题/法院/发布日期/详情链接；详情页 `www` 域静态 `.shtml` 可直连，提取起拍价/评估价/保证金/面积/权证号，金额做了空格与"万元"归一化。只保留 `fresh_days`（默认 7 天）内的公告做每日增量，配置见 `sources.rmfysszc`。实测每轮抓 60 条（3 页），有评估价的标的值得关注（折扣 0.55~0.8 能拉开性价比分）。
 

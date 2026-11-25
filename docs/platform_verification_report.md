@@ -29,6 +29,7 @@
 | **厦门产权 xemas.com.cn** | 资产出租/转让/股权 | ⭐⭐⭐ 可抓（已接入） | 实测 60 条入库 | POST `/cms/article/query`，按 `categorys` 分类树查询 |
 | **青海产权 qhcqjy.com** | 房产/设备/股权/招租 | ⭐⭐ 可抓（已接入） | 实测 10 条入库 | `/item.do?para=viewlist` GBK 列表，详情需逐页解析 |
 | **贵州阳光 prechina.net** | 资产/房产/设备 | ⭐⭐⭐ 可抓（已接入） | 实测 6 条入库 | `/project/` 静态列表，项目编号与挂牌价在 span 中 |
+| **全国产权门户 cspea.com.cn** | 全国 36 家交易所挂牌项目 | ⭐⭐⭐ 可抓（已接入） | 实测 40 条入库，33 条含评估价 | `/list?c=C01..C06&s=A02,A03` SSR 内嵌 `listData` JSON；详情页内嵌 `projectDetailData`（评估价、来源交易所、源站链接）；一个源覆盖全国 |
 
 > 第二批完整 36 家名单与逐站核验结论见工作区 `output/sasac_property_exchanges.md`。
 | 全国企业破产重整 pccz.court.gov.cn | 破产财产 | ⭐⭐ 接口可用(前日验证) | 接口POST searchKey/gjsslb | 全文匹配易混外地案号 |
@@ -132,3 +133,31 @@
 - 大连 `daee.cn` / 河南 `zycqjy.com`：zbxsoft 系统接口 `/web/proList/home` 返回 `{"result":"F","message":"Source must not be null"}`，公开页面未暴露该参数来源，暂不接入。
 
 **不重复接入**：内蒙古（`nmgcqjy.ejy365.com`）、新疆（`xjcqjy.ejy365.com`）、黑龙江等机构把项目挂在 e交易 子站，现有 `ejy` 采集器已覆盖；按 `source + external_id` 去重即可。
+
+### 第三批：全国产权交易门户 + 省级平台可抓性（2026-11-25）
+
+**全国产权行业信息化综合服务平台 `cspea.com.cn`（已接入，优先级最高）**
+
+该站定位为全国产权交易资本市场统一门户，首页和项目中心公开展示全国各交易所挂牌标的，**无需登录、无验证码、无 JS 校验**：
+
+- 列表 `GET /list?c={C01..C06}&s=A02,A03`：SSR 页面 `<script>` 内嵌 `window` 状态，其中 `listData.datas` 为项目数组，字段含 `projectCode / projectName / projectPrice`（万元）/ `zoneName / publishDate / expireDate / tradInstitutionName`（来源交易所）/ `projectClassifyCode`。实测分类总量：C01 资产转让 62240、C02 产权转让 1349、C03 企业增资 112、C04 金融资产 607、C05 不良资产 434、C06 债权 44。
+- 列表每次只返回最新 12 条，且在两组缓存间轮换（已用连续 3 次请求验证）；配置 `repeat: 3` 后每类可拿约 20+ 条，6 类合计去重 65 条。
+- 详情 `GET /list/{c01..c06}/{projectCode小写}`：静态页，内嵌 `projectDetailData`，含 `assess.objectEvaluateValue`（评估价）、`seller[].sellerName`、`swProject.importantInfo`（瑕疵/风险说明）、`project.projectUrl`（来源交易所原链接）。取最新 40 条抓详情，实测 33 条拿到评估价，可直接作为 v2 评分的"评估价优先"基准。
+- 实测结果：40 条入库，分类 B 22 / BC 1 / C 17，均分 59.2（最高 77），全量重算后总库 2452 条，API 与 `/admin` 均可查。
+- 公开接口 `/api/enjoyProject/getProjectList` 等需要额外鉴权参数（返回"参数不合法"），**不猜测内部参数**，走 SSR 公开页面。
+
+**其余省级交易所可抓性（2026-11-25 低频实测，每站首页仅 1 次请求）**
+
+14 家未接入省级站点全部 HTTP 200 可访问，但"能否直接抓到项目"差异明显：
+
+| 站点 | 实测结论 | 建议 |
+|---|---|---|
+| 福建 `fjcqjy.com` | 首页 38 条 `/html/list-content-*.html` 项目详情链接，静态 HTML | 可接入，优先级高 |
+| 江西 `jxcq.jxggzyjy.cn` | 有"正式挂牌项目"栏目 `project_center.html`，但列表靠 JS 加载，页面源码无项目条目 | 需先定位列表接口 |
+| 青岛 `cqjy.qdcq.net` | 明确项目列表入口 `portal/pro/items.jsp` | 可接入，优先级中 |
+| 天津 `tpre.cn` / 沈阳 `sprtc.com` | 有公告栏目 `news/jysgg.html`、`gghz1/xmgg.htm` | 可接入，优先级中 |
+| 浙江 `zjpse.com` | 首页挂牌关键词多，但项目跳 `shipbid.net`，前端渲染 | 需定位接口；其项目已大量出现在 cspea |
+| 广东联合 / 北部湾 / 海南 / 云南 / 西部 / 宁夏 / 宁波 | 首页有挂牌关键词但无直出项目链接，列表在子栏目/JS | 暂不接，cspea 已覆盖其挂牌项目 |
+| 湖南 `hnaee.com` | 首页无可提取关键词与项目链接 | 暂不接 |
+
+**结论**：cspea 一个源已覆盖全国交易所的最新挂牌，且带评估价，边际价值高于逐个铺开省级站点。后续要扩量，优先调大 cspea 的 `repeat` / `max_detail`，再按上表接入福建、青岛、天津、沈阳。北京、江苏、甘肃、大连、河南仍按合规边界维持人工查看。

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""第二批国资委认定产权交易机构采集器。
+"""国资委认定产权交易机构 + 全国产权交易门户采集器。
 
 已接入（公开接口/静态列表，实测 2026-11-25）：
 - wuhan_ovupre  武汉光谷联合产权交易所  GET  /index/new_getxxmm.html  → JSON
@@ -7,6 +7,8 @@
 - guizhou_cqjy  贵州阳光产权交易所      GET  /project/index.php       → HTML
 - shenzhen_sotcbb 深圳联合产权交易所    POST /api/v1/sotcbb/local/project/list → JSON
 - xiamen_cqjy   厦门产权交易中心        POST /cms/article/query        → JSON
+- cspea_national 全国产权行业信息化综合服务平台 GET /list?c=..&s=.. → SSR 内嵌 JSON
+  （一个源覆盖全国各地产权交易所，列表含 tradInstitutionName 来源机构）
 
 未接入（站点策略限制，保持人工查看，不绕验证码/不伪造）：
 - gansu_cqjy    www.gscq.com.cn        本机出口持续 403（WAF）
@@ -405,5 +407,132 @@ class XiamenCollector(_ExchangeBase):
                 has_defect_note=("瑕疵" in strip_tags(str(r.get("userdefine7") or ""))),
                 url=f"https://www.xemas.com.cn/project-announcement-details-new.html?uid={r['uid']}",
                 raw=clean_text(data.get("no")),
+            ))
+        return self._finish(out)
+
+
+# ---------------- 全国产权行业信息化综合服务平台（cspea.com.cn） ----------------
+
+class CspeaCollector(_ExchangeBase):
+    """全国产权交易门户：SSR 列表页内嵌 listData，详情页内嵌 projectDetailData。
+
+    实测 2026-11-25：C01 资产转让 62240 条、C02 产权转让 1349 条、C03 企业增资
+    112 条、C04 金融资产 607 条、C05 不良资产 434 条、C06 债权 44 条。列表每次
+    返回最新 12 条且在两组缓存间轮换，故每类多取几次以覆盖增量。每条记录带
+    tradInstitutionName（来源交易所），一个源即可覆盖全国机构，且无需登录。
+    """
+    name = "cspea_national"
+    org_name = "全国产权行业信息化综合服务平台"
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.base = config.get("base", "https://www.cspea.com.cn").rstrip("/")
+        self.categories = config.get(
+            "categories", ["C01", "C02", "C03", "C04", "C05", "C06"])
+        self.repeat = int(config.get("repeat", 3))
+        self.max_detail = int(config.get("max_detail", 40))
+        self.status = config.get("status", "A02,A03")  # 正式/预披露，排除成交状态
+
+    @staticmethod
+    def _embedded_state(html: str, key: str) -> dict:
+        """从 SSR 页面的 script 标签里解析内嵌 JSON。"""
+        for m in re.finditer(r"<script[^>]*>(.*?)</script>", html or "", re.S | re.I):
+            seg = m.group(1)
+            if key not in seg:
+                continue
+            mm = re.search(r"(\{.*\})\s*;?\s*$", seg.strip(), re.S)
+            if mm:
+                try:
+                    return json.loads(mm.group(1))
+                except Exception:
+                    continue
+        return {}
+
+    def _list(self, code: str) -> list[dict]:
+        url = f"{self.base}/list?c={code}&s={self.status}"
+        try:
+            html = fetch_bytes(url).decode("utf-8", "ignore")
+        except Exception as e:
+            print(f"  [{self.name}] 列表 {code} 失败: {e}", flush=True)
+            return []
+        state = self._embedded_state(html, "listData")
+        return (state.get("listData") or {}).get("datas") or []
+
+    def _detail_url(self, row: dict) -> str:
+        code = clean_text(row.get("projectCode"))
+        cls = str(row.get("projectClassifyCode") or "C01").split(",")[0].lower()
+        return f"{self.base}/list/{cls}/{code.lower()}"
+
+    def _detail(self, row: dict) -> dict:
+        try:
+            html = fetch_bytes(self._detail_url(row)).decode("utf-8", "ignore")
+        except Exception:
+            return {}
+        return self._embedded_state(html, "projectDetailData").get("projectDetailData") or {}
+
+    @staticmethod
+    def _ms_date(v) -> str:
+        if not isinstance(v, (int, float)) or v <= 0:
+            return ""
+        try:
+            from datetime import datetime
+            return datetime.fromtimestamp(v / 1000).strftime("%Y-%m-%d")
+        except Exception:
+            return ""
+
+    def collect(self) -> list[Listing]:
+        rows, seen = [], set()
+        for cat in self.categories:
+            for _ in range(self.repeat):
+                got = self._list(cat)
+                if not got:
+                    break
+                for r in got:
+                    code = clean_text(r.get("projectCode"))
+                    if not code or code in seen:
+                        continue
+                    seen.add(code)
+                    rows.append(r)
+                self.polite_sleep()
+        rows.sort(key=lambda r: r.get("publishDate") or 0, reverse=True)
+        print(f"  [{self.name}] 列表去重后 {len(rows)} 条", flush=True)
+
+        out = []
+        for r in rows[: self.max_detail]:
+            title = clean_text(r.get("projectName") or r.get("projectText"))
+            if not title:
+                continue
+            detail = self._detail(r)
+            self.polite_sleep()
+            proj = detail.get("project") or {}
+            assess = detail.get("assess") or {}
+            sellers = detail.get("seller") or []
+            extra = detail.get("swProject") or {}
+
+            pv = r.get("projectPrice")
+            price_yuan = float(pv) * 10000 if isinstance(pv, (int, float)) and pv > 0 else None
+            av = assess.get("objectEvaluateValue")
+            appraisal = float(av) * 10000 if isinstance(av, (int, float)) and av > 0 else None
+            seller = (clean_text(sellers[0].get("sellerName")) if sellers else "") or \
+                clean_text(r.get("tradInstitutionName"))
+            note = " ".join(str(extra.get(k) or "") for k in ("description", "transferNotes"))
+            source_site = clean_text(proj.get("projectUrl"))
+
+            out.append(Listing(
+                source=self.name, external_id=clean_text(r.get("projectCode")),
+                title=title, asset_type=guess_type(title + " " + note[:120]),
+                city=clean_text(r.get("zoneName")),
+                price_yuan=price_yuan,
+                price_text=f"{pv}万元" if price_yuan else "",
+                appraisal_yuan=appraisal,
+                published_at=self._ms_date(r.get("publishDate")),
+                deadline=self._ms_date(r.get("expireDate")),
+                seller=seller, seller_grade="产权机构",
+                second_listing=bool(re.search(r"第[二2三四3]次|再次挂牌|重新挂牌", title)),
+                has_defect_note=("瑕疵" in note),
+                url=self._detail_url(r),
+                raw=" | ".join(x for x in [
+                    clean_text(r.get("tradInstitutionName")),
+                    clean_text(r.get("projectClassifyCode")), source_site] if x),
             ))
         return self._finish(out)
