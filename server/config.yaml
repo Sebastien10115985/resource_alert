@@ -168,6 +168,46 @@ sources:
     max_detail: 60            # 每轮最多抓多少详情页
     fresh_days: 7             # 只保留发布日期在 N 天内的公告
 
+  # 第二批：国资委认定产权交易机构（静态列表/公开 JSON 接口，低频抓取）
+  # 注意：内蒙古/新疆/黑龙江等已在 ejy365 子站，由 ejy 源覆盖，不重复接入。
+  wuhan_ovupre:
+    enabled: true             # 武汉光谷联合产权交易所 /index/new_getxxmm.html
+    group: open
+    base: https://ovupre.com
+    request_interval_sec: 0.5
+    indexes: [2, 1, 3]        # 2=实物资产转让 1=产权转让 3=企业增资
+    pages: 2
+    page_size: 20
+  qinghai_cqjy:
+    enabled: true             # 青海省产权交易市场 /item.do 列表（GBK）
+    group: open
+    base: http://www.qhcqjy.com
+    request_interval_sec: 0.6
+    ass_list: ["01", "02", "03", "07", "16"]
+    pages: 2
+    max_detail: 60
+  guizhou_cqjy:
+    enabled: true             # 贵州阳光产权交易所 /project/ 静态列表
+    group: open
+    base: https://www.prechina.net
+    request_interval_sec: 0.5
+    pages: 3
+  shenzhen_sotcbb:
+    enabled: true             # 深圳联合产权交易所 POST /api/v1/sotcbb/local/project/list
+    group: open
+    api: https://www.sotcbb.com/api/v1/sotcbb/local/project/list
+    request_interval_sec: 0.5
+    pages: 3
+    page_size: 20
+  xiamen_cqjy:
+    enabled: true             # 厦门产权交易中心 POST /cms/article/query
+    group: open
+    api: https://www.xemas.com.cn/cms/article/query
+    root_uid: a22482fe-5ddb-44a2-af49-ebbc22c1d29b
+    request_interval_sec: 0.5
+    pages: 3
+    page_size: 20
+
 # 推送通道（密钥不要写进代码库，运行时用环境变量覆盖）
 push:
   channels:

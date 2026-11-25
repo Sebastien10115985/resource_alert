@@ -8,7 +8,7 @@ server/
 ├── common.py            # 统一 Schema(Listing)、数值解析、配置加载
 ├── run_daily.py         # 每日主流程：采集→评分→入库→优选→推送
 ├── scheduler.py         # APScheduler 定时（每日 07:30）
-├── collectors/          # 采集器：land_market / mining / ejy / ggzy / rmfysszc + filter + scheduler(分组调度)
+├── collectors/          # 采集器：land_market / mining / ejy / ggzy / rmfysszc / property_exchanges(5家产权机构) + filter + scheduler
 ├── pipeline/            # classifier / scorer(旧) / value_scorer(v2) / selector / notifier
 ├── db/store.py          # SQLite 存储 + 变更检测 + 旧库迁移
 ├── rescore.py           # 用当前算法重算全库分数并回写（不重新采集）
@@ -136,9 +136,11 @@ python rescore.py             # 全量重算 + 回写 + 重排当日推荐
 | `open`（免爬） | `group: open` | 按注册顺序连续抓，站点间不额外等待；采集器内部仍按 `request_interval_sec` 礼貌间隔 |
 | `throttled`（反爬/限流） | `group: throttled` + `cooldown_sec` + `max_attempts` | round-robin：每个站点抓一次就换下一个；**同一站点两次任务间隔 ≥ cooldown_sec**（默认 120 秒）；失败也计入冷却，最多重试 `max_attempts` 次 |
 
-当前分组：`land_market` / `mining` / `ejy` / `rmfysszc` 为 open（实测无反爬）；`ggzy` 为 throttled。
+当前分组：`land_market` / `mining` / `ejy` / `rmfysszc` / `wuhan_ovupre` / `qinghai_cqjy` / `guizhou_cqjy` / `shenzhen_sotcbb` / `xiamen_cqjy` 为 open（实测无反爬）；`ggzy` 为 throttled。
 
 **rmfysszc（人民法院诉讼资产网）已接入**：列表走 `www1` 域 `POST /News/Handler.aspx`（`www` 主域同一接口返回错误页），返回 JSON 含标题/法院/发布日期/详情链接；详情页 `www` 域静态 `.shtml` 可直连，提取起拍价/评估价/保证金/面积/权证号，金额做了空格与"万元"归一化。只保留 `fresh_days`（默认 7 天）内的公告做每日增量，配置见 `sources.rmfysszc`。实测每轮抓 60 条（3 页），有评估价的标的值得关注（折扣 0.55~0.8 能拉开性价比分）。
+
+**第二批产权交易机构（property_exchanges.py）已接入**：武汉光谷（`GET /index/new_getxxmm.html`）、深圳联交所（`POST /api/v1/sotcbb/local/project/list`）、厦门产权（`POST /cms/article/query` + 分类树）、青海产权（GBK `/item.do` 列表）、贵州阳光（`/project/` 静态列表），实测共 201 条入库。内蒙古/新疆/黑龙江等在 `*.ejy365.com` 子站上，由 `ejy` 源覆盖不重复接。甘肃 `gscq.com.cn` 返回 403、大连/河南 zbxsoft 接口缺公开 `source` 参数，均保持人工查看不绕过。配置见 `sources.wuhan_ovupre` 等 5 节。
 
 **ggzy 现状**：列表接口 `getTradList` 有验证码（code 829）+ 限流（code 800），直连返回 404/风控页，**不硬闯、不绕验证码**——采集器探测到风控就优雅降级返回 0 条并记录 `blocked` 原因，调度器冷却 2 分钟后重试。详情页是静态 HTML 可直连，作为后续扩展入口。
 

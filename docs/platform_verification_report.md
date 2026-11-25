@@ -1,6 +1,6 @@
 # 资源类型 → 平台入口：实测验证报告
 
-> 实测时间：2026-11-24。方法：对每个平台做直接 HTTP 访问（长超时 45s）+ 浏览器渲染读取 + 前端 API 逆向，判断"能否程序化抓到真实挂牌数据"。
+> 实测时间：2026-11-24（第一批），2026-11-25 追加第二批国资委认定产权交易机构。方法：对每个平台做直接 HTTP 访问（长超时 45s）+ 浏览器渲染读取 + 前端 API 逆向，判断"能否程序化抓到真实挂牌数据"。
 > 核心结论：**"能打开"≠"能抓到数据"**。你给的清单方向正确，但可抓取性差异极大——有的接口完全开放，有的必须登录，有的动态渲染且有验证码。
 
 ---
@@ -24,6 +24,13 @@
 | 上海联合产权 suaee.com | 长三角国资 | ⭐ SPA | 未定位到公开列表 | 项目列表路径404 |
 | 北交所诉讼资产 otc.cbex.com | 诉讼资产 | ✗ 连接失败 | 无 | 网络不可达 |
 | **人民法院诉讼资产网 rmfysszc.gov.cn** | 司法拍卖房产/车/土地 | ⭐⭐⭐ 可抓（已接入） | 实测一轮 60 条当日公告，已入库 | 列表走 www1 域 POST /News/Handler.aspx；详情静态页可直连，含起拍/评估/保证金/面积；无验证码 |
+| **武汉光谷 ovupre.com** | 国有资产/增资/租赁 | ⭐⭐⭐ 可抓（已接入） | 实测 65 条入库 | GET `/index/new_getxxmm.html` 返回 JSON，字段 XMMC/XMBH/ZRDJ/KSRQ/JSRQ |
+| **深圳联合产权 sotcbb.com** | 公有产权/房产/设备 | ⭐⭐⭐ 可抓（已接入） | 实测 60 条入库 | POST `/api/v1/sotcbb/local/project/list`，字段全（价格/起止日/地区/项目编号） |
+| **厦门产权 xemas.com.cn** | 资产出租/转让/股权 | ⭐⭐⭐ 可抓（已接入） | 实测 60 条入库 | POST `/cms/article/query`，按 `categorys` 分类树查询 |
+| **青海产权 qhcqjy.com** | 房产/设备/股权/招租 | ⭐⭐ 可抓（已接入） | 实测 10 条入库 | `/item.do?para=viewlist` GBK 列表，详情需逐页解析 |
+| **贵州阳光 prechina.net** | 资产/房产/设备 | ⭐⭐⭐ 可抓（已接入） | 实测 6 条入库 | `/project/` 静态列表，项目编号与挂牌价在 span 中 |
+
+> 第二批完整 36 家名单与逐站核验结论见工作区 `output/sasac_property_exchanges.md`。
 | 全国企业破产重整 pccz.court.gov.cn | 破产财产 | ⭐⭐ 接口可用(前日验证) | 接口POST searchKey/gjsslb | 全文匹配易混外地案号 |
 | 阿里拍卖破产强清 susong.taobao.com | 实际出价 | ⭐⭐ WebFetch可读 | 详情页渲染可读 | 直连跳登录；mtop 接口需 token 签名见 §六 |
 | 京东拍卖破产强清 auction.jd.com | 实际出价 | ⭐ 空壳 | 无 | 仅157字节 |
@@ -110,3 +117,18 @@
 - `collectors/scheduler.py` 把数据源分 open（免爬，连续抓）与 throttled（反爬，低频轮询）两组。
 - throttled 组 round-robin：每个站点抓一次换下一个，同一站点两次任务间隔 ≥ `cooldown_sec`（默认 120 秒），全部冷却时睡到最近到期站点；失败也计入冷却，最多 `max_attempts` 次。
 - 实测：免爬组连续抓 land_market 27 + mining 200 + ejy 836 条；ggzy 两次降级（间隔 2 分钟）均返回 0 条并记 `blocked`。假时钟单测验证轮询顺序与冷却间隔正确。
+
+### 第二批：国资委认定产权交易机构（2026-11-25）
+依据国资厅产权〔2020〕333 号文，36 家机构全部有公开平台并查到挂牌信息（完整清单见工作区 `output/sasac_property_exchanges.md`）。已接入 5 家，实测共 **201 条**全部入库，全量重算后库内 2381 条：
+
+- **武汉光谷 `ovupre.com`**：`GET /index/new_getxxmm.html?pageSize=20&pageNo=N&index={2|1|3}`，JSON 字段 `XMMC/XMBH/ZRDJ/KSRQ/JSRQ/URL`；实测 65 条（含 BC 双推 6 条）。
+- **深圳联合 `sotcbb.com`**：`POST /api/v1/sotcbb/local/project/list`，body 带 `targetColumnIds:["3226"]`，返回 `title/projectNo/listingPriceUnits/registerFrom/registerTo/targetRegion`；实测 60 条。
+- **厦门产权 `xemas.com.cn`**：`POST /cms/article/query?size=&page=&getData=true&getResource=true`，body 带 `categorys:["a22482fe-…getProgeniture"]`（分类树），返回 `title/data.listingPrice/data.sellerName/userdefine3/userdefine5`；实测 60 条。注意 URL 参数形式拿不到数据，必须用分类树 POST。
+- **青海产权 `qhcqjy.com`**：`GET /item.do?para=viewlist&classCode=3001&ass={01|02|03|07|16}`，**GBK 编码**；列表只给标题，详情抓 `para=viewcontent` 提取挂牌价/评估价/面积；实测 10 条。
+- **贵州阳光 `prechina.net`**：`GET /project/` 静态列表，项目编号/挂牌时间/挂牌价在 span 中；实测 6 条。
+
+**未接入（保持人工查看，不绕策略）**：
+- 甘肃 `gscq.com.cn`：本机出口持续 HTTP 403（WAF），不尝试绕过。
+- 大连 `daee.cn` / 河南 `zycqjy.com`：zbxsoft 系统接口 `/web/proList/home` 返回 `{"result":"F","message":"Source must not be null"}`，公开页面未暴露该参数来源，暂不接入。
+
+**不重复接入**：内蒙古（`nmgcqjy.ejy365.com`）、新疆（`xjcqjy.ejy365.com`）、黑龙江等机构把项目挂在 e交易 子站，现有 `ejy` 采集器已覆盖；按 `source + external_id` 去重即可。
