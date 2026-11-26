@@ -2,17 +2,49 @@
 """推送：企业微信/钉钉机器人 + Server酱。密钥从环境变量读取，不写死在代码里。"""
 import os
 import json
+import time
+import hmac
+import hashlib
+import base64
 import urllib.parse
 import urllib.request
 
 from common import Listing
 
 
+def _dingtalk_signed_url(webhook: str, secret: str) -> str:
+    """按钉钉加签规则生成带 timestamp/sign 的 Webhook。无 secret 时原样返回。
+
+    钉钉加签：string_to_sign = timestamp + "\\n" + secret，用 secret 做 HMAC-SHA256，
+    Base64 后 URL 编码，作为 sign 参数，与 timestamp 一起拼到 Webhook 查询串。
+    """
+    if not secret:
+        return webhook
+    timestamp = str(round(time.time() * 1000))
+    string_to_sign = f"{timestamp}\n{secret}"
+    hmac_code = hmac.new(secret.encode("utf-8"), string_to_sign.encode("utf-8"),
+                         digestmod=hashlib.sha256).digest()
+    sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+    sep = "&" if "?" in webhook else "?"
+    return f"{webhook}{sep}timestamp={timestamp}&sign={sign}"
+
+
 def _post_json(url: str, payload: dict) -> bool:
     try:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json; charset=utf-8"})
         with urllib.request.urlopen(req, timeout=15) as r:
+            raw = r.read().decode("utf-8", "ignore")
+            # 钉钉/企微即使 HTTP 200 也可能在 body 里返回 errcode != 0（如签名错误、关键词不匹配）
+            try:
+                j = json.loads(raw)
+                if "errcode" in j:
+                    if j["errcode"] != 0:
+                        print("  push ERR errcode", j["errcode"], str(j.get("errmsg", ""))[:80])
+                        return False
+            except (ValueError, TypeError):
+                pass
             return r.status == 200
     except Exception as e:
         print("  push ERR", str(e)[:100])
@@ -20,7 +52,8 @@ def _post_json(url: str, payload: dict) -> bool:
 
 
 def build_daily_markdown(date: str, by_cat: dict[str, list[Listing]]) -> str:
-    lines = [f"## 每日资源优选 · {date}"]
+    # 标题含小写 resource：钉钉机器人若设了自定义关键词 resource，正文必须包含它才能推送成功
+    lines = [f"## resource · 每日资源优选 · {date}"]
     for cat, name in (("B", "企业类"), ("C", "个人类")):
         lines.append(f"\n**{name} Top{len(by_cat.get(cat, []))}**")
         items = by_cat.get(cat, [])[:10]
@@ -50,11 +83,13 @@ def push_daily(config: dict, date: str, by_cat: dict[str, list[Listing]],
         if not (already_pushed_fn and already_pushed_fn(date, "wecom")):
             ok = _post_json(wecom, {"msgtype": "markdown", "markdown": {"content": md}})
             results["wecom"] = ok
-    # 钉钉机器人
+    # 钉钉机器人（支持加签：DINGTALK_BOT_SECRET / channels.dingtalk_secret）
     ding = os.environ.get("DINGTALK_BOT_WEBHOOK") or pcfg.get("channels", {}).get("dingtalk_bot", "")
     if ding:
         if not (already_pushed_fn and already_pushed_fn(date, "dingtalk")):
-            ok = _post_json(ding, {"msgtype": "markdown", "markdown": {"title": "每日资源优选", "text": md}})
+            secret = os.environ.get("DINGTALK_BOT_SECRET") or pcfg.get("channels", {}).get("dingtalk_secret", "")
+            ok = _post_json(_dingtalk_signed_url(ding, secret),
+                            {"msgtype": "markdown", "markdown": {"title": "每日资源优选", "text": md}})
             results["dingtalk"] = ok
     # Server酱
     key = os.environ.get("SERVERCHAN_KEY") or pcfg.get("channels", {}).get("serverchan_key", "")

@@ -171,6 +171,36 @@ M1 默认 `push.enabled: false`。要启用，二选一：
   - `SERVERCHAN_KEY`（Server酱）
 然后设 `push.enabled: true`。
 
+### 方案 A：Server酱 Turbo 转发到钉钉群（推荐，代码已就绪）
+代码发的是 Turbo 格式 `POST https://sctapi.ftqq.com/{SENDKEY}.send`（`title` + `desp`），
+消息落到哪个终端由 **Server酱后台的通道配置**决定，程序侧不用改。
+
+1. **建钉钉机器人**：钉钉群 → 群设置 → 智能群助手 → 添加机器人 → 自定义，
+   拿到 Webhook（`https://oapi.dingtalk.com/robot/send?access_token=xxx`）。
+   安全设置二选一：
+   - 加签：记下 `SEC` 开头的 secret（Server酱后台会代为签名）；
+   - 自定义关键词：填 `资源` 或 `优选`（本系统推送标题为「每日资源优选 YYYY-MM-DD」，含这两个词）。
+2. **配 Server酱通道**：打开 https://sct.ftqq.com 微信扫码登录 →「SendKey」页复制 `SCT` 开头的 key
+   → 进入「通道配置」→ 选「钉钉群机器人」→ 粘贴 Webhook（加签模式再填 secret）→ 保存 → 点「测试」确认群里收到。
+3. **接入系统**：设环境变量 `SERVERCHAN_KEY=<SCT 开头的 key>`（注意是 `SERVERCHAN_KEY`，
+   不是官方文档里的 `SERVERCHAN_SENDKEY`），并把 `push.enabled` 设为 `true`。
+4. **验证**：`curl -X POST "https://sctapi.ftqq.com/$SERVERCHAN_KEY.send" -d "title=测试" -d "desp=推送已通"`；
+   再跑一次 `python run_daily.py`，看钉钉群是否收到当日优选。
+
+> 注意：Server酱 Turbo 免费版每天 5 条。本系统 `already_pushed` 按「日期+通道」去重，
+> 每天每通道只推 1 条，额度够用。SCT / SC3 的 key 不通用，本代码只认 Turbo 的 `SCT` 开头 key。
+
+### 方案 B：钉钉机器人直连（不经 Server酱，无条数限制，已实测打通）
+把钉钉 Webhook 填进环境变量 `DINGTALK_BOT_WEBHOOK`，加签密钥填进 `DINGTALK_BOT_SECRET`，
+设 `push.enabled: true` 即可直推 markdown 到群。**代码已内建加签**（`_dingtalk_signed_url` 做
+HMAC-SHA256 + Base64 + URL 编码，拼 `timestamp`/`sign`），无需自己改造。未加签时 `DINGTALK_BOT_SECRET` 留空。
+
+> **关键词坑**：若建机器人时安全设置选了「自定义关键词」（如 `resource`），
+> 推送正文必须包含该词才能发出去，否则钉钉返回 `errcode 310000 关键词不匹配`。
+> `build_daily_markdown` 的标题已固定带小写 `resource`，普通关键词场景无需改动；
+> 若你设的是别的词，把它加进标题即可。只勾「加签」则无此限制。
+> `_post_json` 会读响应体的 `errcode`，HTTP 200 但业务失败也会记为推送失败。
+
 ## 定时任务落地（注意用 venv 的解释器）
 
 - **WorkBuddy 定时任务（推荐）**：建一条每天 07:30 的 recurring 自动化，prompt 里写清楚用 venv：

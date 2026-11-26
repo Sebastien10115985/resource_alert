@@ -252,6 +252,7 @@ push:
   channels:
     wecom_bot: ""             # 企业微信机器人 Webhook；或用环境变量 WECOM_BOT_WEBHOOK
     dingtalk_bot: ""          # 钉钉机器人 Webhook；或环境变量 DINGTALK_BOT_WEBHOOK
+    dingtalk_secret: ""       # 钉钉加签 secret（SEC 开头）；或环境变量 DINGTALK_BOT_SECRET；未加签留空
     serverchan_key: ""        # Server酱 sendkey；或环境变量 SERVERCHAN_KEY
   enabled: false              # 未配置密钥时保持关闭，避免误推
 
