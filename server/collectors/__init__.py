@@ -8,6 +8,9 @@ from .property_exchanges import (
     WuhanCollector, QinghaiCollector, GuizhouCollector,
     ShenzhenCollector, XiamenCollector, CspeaCollector,
 )
+from .property_exchanges2 import (
+    FujianCollector, QingdaoCollector, TianjinCollector, ShenyangCollector,
+)
 
 REGISTRY = {
     "land_market": LandMarketCollector,
@@ -23,6 +26,11 @@ REGISTRY = {
     "xiamen_cqjy": XiamenCollector,
     # 全国产权行业信息化综合服务平台（聚合全国交易所）
     "cspea_national": CspeaCollector,
+    # 第三批：省级产权交易机构
+    "fujian_cqjy": FujianCollector,
+    "qingdao_cqjy": QingdaoCollector,
+    "tianjin_cqjy": TianjinCollector,
+    "shenyang_cqjy": ShenyangCollector,
 }
 
 

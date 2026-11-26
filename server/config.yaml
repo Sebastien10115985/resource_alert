@@ -216,6 +216,36 @@ sources:
     status: A02,A03           # 正式披露/预披露，排除已成交
     repeat: 3                 # 每类请求次数（列表在两组缓存间轮换，每次 12 条）
     max_detail: 40            # 每轮最多抓多少详情页（补评估价与来源交易所）
+  fujian_cqjy:
+    enabled: true             # 福建省产权交易中心：首页多栏目表格 + 站内静态详情页
+    group: open
+    base: https://www.fjcqjy.com
+    request_interval_sec: 0.6
+    max_detail: 40
+  qingdao_cqjy:
+    enabled: true             # 青岛产权交易所：/api/dpm/web/pro/{sys}/home（source 走路径前缀）
+    group: open
+    base: https://www.qdcq.net
+    api: https://www.qdcq.net/api/dpm/web/pro/{sys}/home
+    systems: [utrg, utrm, utrz, utrl, utri]  # 国有产权/资产转让/增资/租赁/招商
+    request_interval_sec: 0.5
+    pages: 2
+    rows: 20
+  tianjin_cqjy:
+    enabled: true             # 天津产权交易中心：trade.tpre.cn project-info（8 个业务系统）
+    group: open
+    api: https://trade.tpre.cn/up/biz/up-data-view/anmuas/project-info
+    systems: [ENTERPRISE_ASSETS, PROPERTY_RIGHT_TRANSFER, ENTERPRISE_CAPITAL_INCREASE, ENTERPRISE_INVESTMENT_ATTRACTION, JS, FINANCE, LEASE, SMALL_COMMODITY]
+    request_interval_sec: 0.5
+    pages: 2
+    size: 20
+  shenyang_cqjy:
+    enabled: true             # 沈阳联合产权交易所：静态列表 xmgg.htm（编号/标题/日期）
+    group: open
+    base: https://www.sprtc.com
+    list_path: /gghz1/xmgg.htm
+    request_interval_sec: 0.5
+    pages: 3
 
 # 推送通道（密钥不要写进代码库，运行时用环境变量覆盖）
 push:

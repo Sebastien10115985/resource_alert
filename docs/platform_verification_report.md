@@ -30,6 +30,10 @@
 | **青海产权 qhcqjy.com** | 房产/设备/股权/招租 | ⭐⭐ 可抓（已接入） | 实测 10 条入库 | `/item.do?para=viewlist` GBK 列表，详情需逐页解析 |
 | **贵州阳光 prechina.net** | 资产/房产/设备 | ⭐⭐⭐ 可抓（已接入） | 实测 6 条入库 | `/project/` 静态列表，项目编号与挂牌价在 span 中 |
 | **全国产权门户 cspea.com.cn** | 全国 36 家交易所挂牌项目 | ⭐⭐⭐ 可抓（已接入） | 实测 40 条入库，33 条含评估价 | `/list?c=C01..C06&s=A02,A03` SSR 内嵌 `listData` JSON；详情页内嵌 `projectDetailData`（评估价、来源交易所、源站链接）；一个源覆盖全国 |
+| **福建产权 fjcqjy.com** | 股权/增资/地市资产/招租 | ⭐⭐⭐ 可抓（已接入） | 实测 40 条入库 | 首页多栏目表格 + 站内静态详情页补价 |
+| **青岛产权 qdcq.net** | 股权/资产/增资/租赁 | ⭐⭐⭐ 可抓（已接入） | 实测 175 条入库，149 条有价 | `/api/dpm/web/pro/{sys}/home` JSON，source 走路径前缀 |
+| **天津产权 tpre.cn** | 企业资产/产权/增资/金融 | ⭐⭐⭐ 可抓（已接入） | 实测 233 条入库，223 条有价 | `trade.tpre.cn .../project-info` JSON，8 业务系统 |
+| **沈阳产权 sprtc.com** | 资产处置/股权/报废物资 | ⭐⭐ 可抓（已接入） | 实测 49 条入库 | 静态列表 `xmgg.htm`，详情 iframe 动态加载无静态价 |
 
 > 第二批完整 36 家名单与逐站核验结论见工作区 `output/sasac_property_exchanges.md`。
 | 全国企业破产重整 pccz.court.gov.cn | 破产财产 | ⭐⭐ 接口可用(前日验证) | 接口POST searchKey/gjsslb | 全文匹配易混外地案号 |
@@ -152,12 +156,24 @@
 
 | 站点 | 实测结论 | 建议 |
 |---|---|---|
-| 福建 `fjcqjy.com` | 首页 38 条 `/html/list-content-*.html` 项目详情链接，静态 HTML | 可接入，优先级高 |
+| 福建 `fjcqjy.com` | 首页多栏目表格（编号/标题/日期/链接），静态详情页 | **已接入**（40 条） |
+| 青岛 `qdcq.net` | 新平台 `/api/dpm/web/pro/{sys}/home` JSON（source 走路径前缀） | **已接入**（175 条） |
+| 天津 `tpre.cn` | `trade.tpre.cn/up/biz/.../project-info` JSON，8 个业务系统 | **已接入**（233 条） |
+| 沈阳 `sprtc.com` | 静态列表 `/gghz1/xmgg.htm`（编号/标题/日期） | **已接入**（49 条） |
 | 江西 `jxcq.jxggzyjy.cn` | 有"正式挂牌项目"栏目 `project_center.html`，但列表靠 JS 加载，页面源码无项目条目 | 需先定位列表接口 |
-| 青岛 `cqjy.qdcq.net` | 明确项目列表入口 `portal/pro/items.jsp` | 可接入，优先级中 |
-| 天津 `tpre.cn` / 沈阳 `sprtc.com` | 有公告栏目 `news/jysgg.html`、`gghz1/xmgg.htm` | 可接入，优先级中 |
 | 浙江 `zjpse.com` | 首页挂牌关键词多，但项目跳 `shipbid.net`，前端渲染 | 需定位接口；其项目已大量出现在 cspea |
 | 广东联合 / 北部湾 / 海南 / 云南 / 西部 / 宁夏 / 宁波 | 首页有挂牌关键词但无直出项目链接，列表在子栏目/JS | 暂不接，cspea 已覆盖其挂牌项目 |
 | 湖南 `hnaee.com` | 首页无可提取关键词与项目链接 | 暂不接 |
 
-**结论**：cspea 一个源已覆盖全国交易所的最新挂牌，且带评估价，边际价值高于逐个铺开省级站点。后续要扩量，优先调大 cspea 的 `repeat` / `max_detail`，再按上表接入福建、青岛、天津、沈阳。北京、江苏、甘肃、大连、河南仍按合规边界维持人工查看。
+### 第四批：4 家省级交易所接入（2026-11-26，已入库）
+
+按用户要求顺序接入福建、青岛、天津、沈阳，实现在 `server/collectors/property_exchanges2.py`：
+
+- **福建 `fujian_cqjy`**：首页多个栏目表格解析出项目编号（`ZZ/ND/QZ/XM` 前缀）/标题/发布时间/链接，共 47 条去重；取前 40 条抓站内静态详情页补挂牌价/起止日期/发布机构（外链子站不深抓，避免触及其他站策略）。实测 **40 条**入库，仅 4 条详情页有明确价格（多数写"详见公告"）。
+- **青岛 `qingdao_cqjy`**：新平台 `www.qdcq.net`，旧竞价接口 `cqjy.qdcq.net/portal/bid/data/list/infos` 返回空。真正接口是 `/api/dpm/web/pro/{sys}/home?rows=&page=&proStatus=allNotException`——**source 走路径前缀 `/api/dpm`**（与大连/河南 `/web/proList` 缺 source 报 `Source must not be null` 不同）。系统码 `utrg/utrm/utrz/utrl/utri`；字段 `jcNo/proName/proPrice/realPubStartTime/realPubEndTime/proId`。**坑**：`priceUnit` 标"万元"但 `proPrice` 实为**元**（详情页 JS `toWan(v)=v/10000` 佐证），直接取数值为元，不再乘 10000；且 `proPrice` 是字符串需 `float()` 转换。实测 **175 条**，149 条有价格。
+- **天津 `tianjin_cqjy`**：`trade.tpre.cn/up/biz/up-data-view/anmuas/project-info?current=&size=&systemCode=`，官网首页 JS 里 8 个 systemCode（企业资产/产权转让/增资/招商/技术/金融/租赁/小额资产）；字段最全（编号/标题/价格/地区/转让方/详情链接/状态 `DISCLOSED`）。实测 **233 条**，223 条有价格，30 条 BC 双推。
+- **沈阳 `shenyang_cqjy`**：静态列表 `/gghz1/xmgg.htm`（第 N 页 `xmgg/{N}.htm`），解析 `(2026)编号+标题+日期+详情链接`；详情页 iframe 走 IDTAPI 动态加载、无静态价格，故只入库标题类字段。实测 **49 条**。
+
+全量 `run_daily.py --no-push` 后 `rescore.py` 重算：总库 2452 → **3243 条**，四源均分 59.8~62.4，分类/评分正常，`/api/admin/overview` 与按 source 查询均通过。备份 `server/data/listings.db.bak3`。
+
+**结论与剩余**：cspea + 4 家省级站已覆盖大部分挂牌项目。江西/浙江需定位前端接口；广东联合/北部湾/海南/云南/西部/宁夏/宁波/湖南无直出链接，cspea 已覆盖其项目，暂不单独接。北京、江苏、甘肃、大连、河南仍按合规边界维持人工查看。
