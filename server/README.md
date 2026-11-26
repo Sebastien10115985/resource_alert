@@ -189,6 +189,12 @@ M1 默认 `push.enabled: false`。要启用，二选一：
 
 > 注意：Server酱 Turbo 免费版每天 5 条。本系统 `already_pushed` 按「日期+通道」去重，
 > 每天每通道只推 1 条，额度够用。SCT / SC3 的 key 不通用，本代码只认 Turbo 的 `SCT` 开头 key。
+>
+> **Server酱后台「测试」按钮收不到钉钉消息？** 若钉钉机器人设了自定义关键词（如 `resource`），
+> Server酱测试按钮发的是它自带文案、不含该词，会被钉钉拦截（errcode 310000），属正常现象，
+> 不代表通道配错。用真实 API 发一条标题含该词的消息即可验证：`curl -X POST
+> "https://sctapi.ftqq.com/$SERVERCHAN_KEY.send" -d "title=resource 测试" -d "desp=正文"`。
+> 本系统推送标题已固定带 `resource`，自动推送不受影响。
 
 ### 方案 B：钉钉机器人直连（不经 Server酱，无条数限制，已实测打通）
 把钉钉 Webhook 填进环境变量 `DINGTALK_BOT_WEBHOOK`，加签密钥填进 `DINGTALK_BOT_SECRET`，
